@@ -94,6 +94,7 @@ import { confirmCustom } from "../utils/popup"
 import { initializeClosing, saveComplete } from "../utils/save"
 import { invalidateSearchIndex } from "../utils/searchFast"
 import { updateSettings, updateSyncedSettings, updateThemeValues } from "../utils/updateSettings"
+import { importSongSelectLyrics } from "../utils/songselect"
 import type { MainReturnPayloads } from "./../../types/IPC/Main"
 import { Main } from "./../../types/IPC/Main"
 import { sendMain } from "./main"
@@ -104,6 +105,8 @@ export type MainResponses = {
 }
 
 export const mainResponses: MainResponses = {
+    // SongSelect
+    [ToMain.SONGSELECT_IMPORT]: (data) => importSongSelectLyrics(data.text, data.name),
     // STORES
     [ToMain.SAVE2]: (a) => saveComplete(a),
     [Main.SETTINGS]: (a) => updateSettings(a),

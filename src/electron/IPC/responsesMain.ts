@@ -45,6 +45,7 @@ import { correctSpelling } from "../utils/spellcheck"
 import { executeSpotifyCommand, getSpotifyState } from "../utils/spotify"
 import checkForUpdates from "../utils/updater"
 import { sendToMain } from "./main"
+import { closeSongSelectWindow, openSongSelectWindow } from "../songselect/songSelectManager"
 
 // no need to await Promise returns here
 export const mainResponses: MainResponses = {
@@ -288,7 +289,10 @@ export const mainResponses: MainResponses = {
     [Main.AI_GET_STATUS]: (data) => aiGetModelStatus(data),
     [Main.AI_SETUP]: (data) => aiHandleLocalSetup(data),
     [Main.AI_SET_KEY]: (data) => setAiKey(data),
-    [Main.AI_LLM_COMPLETE]: (data) => completeLLM(data)
+    [Main.AI_LLM_COMPLETE]: (data) => completeLLM(data),
+    // SongSelect
+    [Main.SONGSELECT_OPEN]: (data) => openSongSelectWindow(data?.query),
+    [Main.SONGSELECT_CLOSE]: () => closeSongSelectWindow()
 }
 
 /// ///////

@@ -21,6 +21,7 @@
     import SelectElem from "../../system/SelectElem.svelte"
     import VirtualList from "../VirtualList.svelte"
     import { ShowObj } from "../../../classes/Show"
+    import { openSongSelect } from "../../../utils/songselect"
 
     export let active: string | null
     export let searchValue: string
@@ -233,9 +234,13 @@
     <!-- bind:this={listElem} -->
     <div class="column {readOnly ? '' : 'context #drawer_show'}" on:mouseup={() => focusedArea.set("show_drawer")}>
         {#if createFromSearch && searchValue.length && typeof searchValue === "string" && activeIsSearch}
-            <div class="warning">
+            <div class="warning" style="align-items: center;">
                 <!-- role="none" on:click={createNew} -->
                 <p style="padding: 6px 8px;"><T id="show.enter_create" />: <span style="color: var(--secondary);font-weight: bold;">{searchValue[0]?.toUpperCase() + searchValue.slice(1)}</span></p>
+                <MaterialButton style="margin-left: auto; margin-right: 8px;" variant="outlined" on:click={() => openSongSelect(searchValue)} small>
+                    <Icon id="music" size={0.9} />
+                    <T id="songselect.search_for" />
+                </MaterialButton>
             </div>
         {/if}
 
@@ -269,27 +274,43 @@
 
             {#if searchValue.length > 1 && !filteredShows.length}
                 <Center size={1.2} faded><T id="empty.search" /></Center>
+                <div style="display: flex; justify-content: center; margin: 15px 0;">
+                    <MaterialButton variant="outlined" on:click={() => openSongSelect(searchValue)}>
+                        <Icon id="music" />
+                        <T id="songselect.search_for" />: "{searchValue}"
+                    </MaterialButton>
+                </div>
             {/if}
         {:else}
             <Center size={1.2} faded><T id="empty.shows" /></Center>
+            {#if searchValue.length > 1}
+                <div style="display: flex; justify-content: center; margin: 15px 0;">
+                    <MaterialButton variant="outlined" on:click={() => openSongSelect(searchValue)}>
+                        <Icon id="music" />
+                        <T id="songselect.search_for" />: "{searchValue}"
+                    </MaterialButton>
+                </div>
+            {/if}
         {/if}
     </div>
 </Autoscroll>
 
-{#if showWithNonExistentCategory}
-    <FloatingInputs side="left" onlyOne>
+<FloatingInputs side="left">
+    <MaterialButton variant="outlined" title="SongSelect [CCLI]" on:click={() => openSongSelect(searchValue)}>
+        <Icon id="music" />
+        {#if !$labelsDisabled}<T id="songselect.button" />{/if}
+    </MaterialButton>
+    {#if showWithNonExistentCategory}
         <MaterialButton icon="autofill" on:click={createNonExistentCategories}>
             <T id="category.create_nonexistent" />
         </MaterialButton>
-    </FloatingInputs>
-{:else if active === "all" && !searchValue && filteredShows.length < 20}
-    <FloatingInputs side="left" onlyOne>
+    {:else if active === "all" && !searchValue && filteredShows.length < 20}
         <MaterialButton variant="outlined" title="actions.import [Ctrl+I]" on:click={() => activePopup.set("import")}>
             <Icon id="import" />
-            <T id="actions.import" />
+            {#if !$labelsDisabled}<T id="actions.import" />{/if}
         </MaterialButton>
-    </FloatingInputs>
-{/if}
+    {/if}
+</FloatingInputs>
 
 <FloatingInputs onlyOne gradient>
     <div role="none" class="overflow-interact" on:click={(e) => createShow(e, true)}>

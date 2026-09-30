@@ -57,6 +57,7 @@ import { keysToID } from "../helpers/array"
 import { duplicate } from "../helpers/clipboard"
 import { history } from "../helpers/history"
 import { Main } from "./../../../types/IPC/Main"
+import { openSongSelect } from "../../utils/songselect"
 import { getMediaResults, showResult } from "./quicksearchData"
 
 interface QuickSearchValue {
@@ -222,6 +223,15 @@ export async function quicksearch(searchValue: string, categoryFilter: null | Se
         const shows = showSearch(searchValue, allShows)
         const showsWithPreview = trimValues(shows, MAX_RESULTS_LARGE).map((show) => showResult(show, rawSearchValue))
         addValues(showsWithPreview, "show", "slide")
+
+        if (searchValue.length > 1) {
+            addValues([{
+                id: "songselect",
+                name: `${translateText("songselect.search_for")}: "${rawSearchValue}"`,
+                icon: "music",
+                data: { query: rawSearchValue }
+            }], "songselect_search", "music")
+        }
     }
 
     // --- MEDIA ---
@@ -335,6 +345,9 @@ const triggerActions = {
     add_item_stage: (id: string) => {
         addStageItem(id)
     },
+    songselect_search: (_id: string, data: any) => {
+        openSongSelect(data?.query || "")
+    },
     settings_output: (id: string) => {
         currentOutputSettings.set(id)
         settingsTab.set("display_settings")
@@ -443,6 +456,11 @@ const triggerActions = {
 
         if (id === "error_log") {
             sendMain(Main.OPEN_LOG)
+            return
+        }
+
+        if (id === "songselect") {
+            openSongSelect()
             return
         }
 
@@ -632,6 +650,7 @@ const popups = [
     { id: "manage_dynamic_values", name: "popup.manage_dynamic_values", icon: "dynamic" },
     { id: "manage_icons", name: "popup.manage_icons", icon: "star" },
     { id: "manage_colors", name: "popup.manage_colors", icon: "color" },
+    { id: "songselect", name: "songselect.button", icon: "music", aliases: ["-CCLI", "-SongSelect", "-Songs download", "-Lieder herunterladen"] },
     //
     { id: "manage_emitters", name: "popup.manage_emitters", icon: "emitter", data: { drawerTab: "actions" } },
     { id: "transition", name: "popup.transition", icon: "transition" },

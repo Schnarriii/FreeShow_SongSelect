@@ -193,7 +193,10 @@ export enum Main {
     AI_GET_STATUS = "AI_GET_STATUS",
     AI_SETUP = "AI_SETUP",
     AI_SET_KEY = "AI_SET_KEY",
-    AI_LLM_COMPLETE = "AI_LLM_COMPLETE"
+    AI_LLM_COMPLETE = "AI_LLM_COMPLETE",
+    // SongSelect
+    SONGSELECT_OPEN = "SONGSELECT_OPEN",
+    SONGSELECT_CLOSE = "SONGSELECT_CLOSE"
 }
 
 export interface MainSendPayloads {
@@ -309,6 +312,9 @@ export interface MainSendPayloads {
     [Main.AI_SETUP]: AiSetupOptions
     [Main.AI_SET_KEY]: { providerId: AIProviderId; key: string }
     [Main.AI_LLM_COMPLETE]: { providerId: AIProviderId; model: string; options: { systemPrompt?: string; prompt: string; jsonSchema?: any; temperature?: number; maxTokens?: number } }
+    // SongSelect
+    [Main.SONGSELECT_OPEN]: { query?: string } | undefined
+    [Main.SONGSELECT_CLOSE]: undefined
 }
 
 export interface MainReturnPayloads {
@@ -422,6 +428,9 @@ export interface MainReturnPayloads {
     [Main.AI_SETUP]: Promise<boolean>
     [Main.AI_SET_KEY]: Promise<boolean>
     [Main.AI_LLM_COMPLETE]: Promise<{ text: string; error?: string; code?: string; retryAfter?: number }>
+    // SongSelect
+    [Main.SONGSELECT_OPEN]: boolean
+    [Main.SONGSELECT_CLOSE]: boolean
 }
 
 ///////////

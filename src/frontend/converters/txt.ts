@@ -48,7 +48,7 @@ export function convertTexts(files: { content: string; name?: string; extension?
 
 // convert a plain text input into a show
 // , onlySlides: boolean = false, { existingSlides } = { existingSlides: {} }
-export function convertText({ name = "", origin = "", category = null, text, noFormatting = false, returnData = false, open = true }: any) {
+export function convertText({ name = "", origin = "", category = null, text, noFormatting = false, returnData = false, open = true, splitLinesCount }: any) {
     // remove empty spaces (as groups [] should be used for empty slides)
     // in "Text edit" spaces can be used to create empty "child" slides
     text = text.replaceAll("\r", "").replaceAll("\n \n", "\n\n")
@@ -64,7 +64,10 @@ export function convertText({ name = "", origin = "", category = null, text, noF
     // preprocess chord lines before splitting into sections
     const allLines = text.split("\n")
     const processedLines = preprocessLines(allLines)
-    const processedText = processedLines.join("\n")
+    let processedText = processedLines.join("\n")
+
+    // Ensure each [Header] starts on a clean double newline section boundary
+    processedText = processedText.replace(/([^\n])\n(\[[^\]]+\])/g, "$1\n\n$2")
 
     let sections = processedText.split("\n\n").filter(Boolean)
 
@@ -132,7 +135,7 @@ export function convertText({ name = "", origin = "", category = null, text, noF
     let show: Show = new ShowObj(false, category, layoutID)
     if (origin) show.origin = origin
     // , existingSlides
-    const { slides, layouts } = createSlides(labeled, noFormatting, autoGroups)
+    const { slides, layouts } = createSlides(labeled, noFormatting, autoGroups, splitLinesCount)
 
     // if (onlySlides) return { slides, layouts }
 
@@ -262,6 +265,10 @@ function isHeaderLine(line: string): boolean {
     // Match colon headers like "Intro:", "Verse 1:", "Chorus: x2"
     if (/^[\d\s]*[\p{L}\w\s-]+\s*:\s*([xх]\d+)?$/iu.test(trimmed)) return true
 
+    // Match standalone section headers like "Chorus", "Verse 1", "Bridge", "Refrain", "Vers 1"
+    const rawName = trimmed.replace(/[\[\]'":]+/g, "").trim()
+    if (findGroupMatch(rawName)) return true
+
     return false
 }
 
@@ -377,7 +384,7 @@ function insertChordsIntoLyrics(chordLine: string, lyricLine: string): string {
 
 // TODO: this sometimes splits all slides up with no children (when adding [group])
 // , existingSlides = {}
-function createSlides(labeled: { type: string; text: string }[], noFormatting: boolean, autoGroups: boolean) {
+function createSlides(labeled: { type: string; text: string }[], noFormatting: boolean, autoGroups: boolean, splitLinesCount?: number) {
     const slides: { [key: string]: Slide } = {}
     const layouts: SlideData[] = []
 
@@ -451,9 +458,10 @@ function createSlides(labeled: { type: string; text: string }[], noFormatting: b
         const slideLines = allLines[0].split("\n").filter(Boolean)
 
         // split lines into a set amount of lines
-        if (Number(get(splitLines)) && slideLines.length > get(splitLines)) {
+        const linesLimit = splitLinesCount !== undefined ? splitLinesCount : Number(get(splitLines))
+        if (linesLimit && slideLines.length > linesLimit) {
             allLines = []
-            while (slideLines.length) allLines.push(slideLines.splice(0, get(splitLines)).join("\n"))
+            while (slideLines.length) allLines.push(slideLines.splice(0, linesLimit).join("\n"))
         }
 
         const children: string[] = []
@@ -637,8 +645,8 @@ function fixText(text: string, formatText: boolean): string {
     }
 
     // remove group from text
-    if (text[0] === "[" && text.includes("]")) text = text.slice(text.indexOf("]") + 1)
-    if (text.indexOf(":") === text.split("\n")[0].length - 1 && (formatText || text.split("\n")[0]?.split(" ").length < 3)) text = text.slice(text.indexOf(":") + 1)
+    if (text[0] === "[" && text.includes("]")) text = text.slice(text.indexOf("]") + 1).trim()
+    if (text.indexOf(":") === text.split("\n")[0].length - 1 && (formatText || text.split("\n")[0]?.split(" ").length < 3)) text = text.slice(text.indexOf(":") + 1).trim()
 
     if (formatText) {
         // repeat text
@@ -738,6 +746,33 @@ export function findGroupMatch(group: string): string {
         .trim()
 
     if (!searchLabel) return ""
+
+    // Common standard group synonyms across English & German
+    const groupSynonyms: Record<string, string> = {
+        verse: "verse",
+        vers: "verse",
+        strophe: "verse",
+        v: "verse",
+        chorus: "chorus",
+        refrain: "chorus",
+        c: "chorus",
+        bridge: "bridge",
+        b: "bridge",
+        "pre-chorus": "pre_chorus",
+        prechorus: "pre_chorus",
+        "pre-refrain": "pre_chorus",
+        prerefrain: "pre_chorus",
+        intro: "intro",
+        outro: "outro",
+        ending: "outro",
+        schluss: "outro",
+        tag: "tag",
+        interlude: "break",
+        instrumental: "break",
+        zwischenspiel: "break",
+        break: "break"
+    }
+    if (groupSynonyms[searchLabel]) return groupSynonyms[searchLabel]
 
     // Check if the label matches a custom group name defined by the user
     const allGroups = get(groups)

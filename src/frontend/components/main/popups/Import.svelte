@@ -12,6 +12,7 @@
     import InputRow from "../../input/InputRow.svelte"
     import MaterialButton from "../../inputs/MaterialButton.svelte"
     import Tip from "../Tip.svelte"
+    import { openSongSelect } from "../../../utils/songselect"
 
     let mode = $popupData.mode
     popupData.set({})
@@ -256,18 +257,33 @@
         </MaterialButton>
     </div>
 
-    <MaterialButton
-        style="margin-top: 5px;"
-        variant="outlined"
-        on:click={() => {
-            importFromClipboard()
-            activePopup.set(null)
-        }}
-        title="actions.paste [Ctrl+Alt+I]"
-    >
-        <Icon id="paste" size={1.2} white />
-        {translateText("formats.clipboard")}
-    </MaterialButton>
+    <div style="display: flex; gap: 5px; margin-top: 5px;">
+        <MaterialButton
+            style="flex: 1;"
+            variant="outlined"
+            on:click={() => {
+                importFromClipboard()
+                activePopup.set(null)
+            }}
+            title="actions.paste [Ctrl+Alt+I]"
+        >
+            <Icon id="paste" size={1.2} white />
+            {translateText("formats.clipboard")}
+        </MaterialButton>
+
+        <MaterialButton
+            style="flex: 1; border: 1px solid #00a3e0; background: rgba(0, 163, 224, 0.12);"
+            variant="outlined"
+            on:click={() => {
+                openSongSelect()
+                activePopup.set(null)
+            }}
+            title="SongSelect by CCLI"
+        >
+            <Icon id="music" size={1.2} white />
+            SongSelect (CCLI)
+        </MaterialButton>
+    </div>
 
     <HRule title="settings.media_import" />
 

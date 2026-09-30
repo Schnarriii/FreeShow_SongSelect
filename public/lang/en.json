@@ -1853,5 +1853,13 @@
         "confidence_highest": "If confident",
         "confidence_high": "If high confidence",
         "confidence_medium": "If medium confidence"
+    },
+    "songselect": {
+        "button": "SongSelect",
+        "search_for": "Search in SongSelect",
+        "online": "Online",
+        "import": "Import to FreeShow",
+        "import_hint": "Import song into FreeShow (2 lines per slide)",
+        "success": "Song successfully saved to 'Songs'"
     }
 }

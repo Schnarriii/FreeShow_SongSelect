@@ -23,4 +23,18 @@ function movePreload() {
     writeFileSync(newPreloadMapPath, JSON.stringify(parsedPreloadMap))
 }
 
-if (process.env.NODE_ENV !== "production") movePreload()
+function copySongSelectBanner() {
+    const rootPath = join(__dirname, "..")
+    const src = join(rootPath, "src", "electron", "songselect", "injectedBanner.js")
+    const dest = join(rootPath, "build", "electron", "songselect", "injectedBanner.js")
+    try {
+        copyFile(src, dest, (err) => {
+            if (err) console.error("Error copying injectedBanner file:", err)
+        })
+    } catch (e) {}
+}
+
+if (process.env.NODE_ENV !== "production") {
+    movePreload()
+    copySongSelectBanner()
+}

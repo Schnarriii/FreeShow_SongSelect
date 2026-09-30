@@ -38,7 +38,8 @@ export enum ToMain {
     API_TRIGGER2 = "API_TRIGGER2",
     OPEN_FOLDER2 = "OPEN_FOLDER2",
     OPEN_FILE2 = "OPEN_FILE2",
-    RECEIVE_MIDI2 = "RECEIVE_MIDI2"
+    RECEIVE_MIDI2 = "RECEIVE_MIDI2",
+    SONGSELECT_IMPORT = "SONGSELECT_IMPORT"
 }
 export interface ToMainSendPayloads {
     [ToMain.ALERT]: string
@@ -76,6 +77,8 @@ export interface ToMainSendPayloads {
     // AI
     [ToMain.AI_STATUS]: { state: "listening" | "stopped" | "error"; message?: string }
     [ToMain.AI_TRANSCRIPT]: { text: string; interim?: boolean; startMs?: number; endMs?: number; language?: string; music?: boolean; utteranceEnd?: boolean; confidence?: number; glue?: boolean }
+    // SongSelect
+    [ToMain.SONGSELECT_IMPORT]: { text: string; name?: string }
 }
 
 export interface ToMainReturnPayloads {

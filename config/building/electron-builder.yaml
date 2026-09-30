@@ -1,6 +1,7 @@
 appId: app.freeshow
 productName: FreeShow
 artifactName: FreeShow-${version}-${arch}.${ext}
+npmRebuild: false
 
 # WIDEVINE
 # Use castlabs electron builds to get widevine support
@@ -38,11 +39,11 @@ win:
         - "**/node_modules/libspotifyctl/**/*"
         - "**/node_modules/openmediatransport/**"
         - "**/node_modules/sherpa-onnx-*/**"
-    azureSignOptions:
-        publisherName: Live Church Solutions
-        endpoint: https://wus2.codesigning.azure.net/
-        certificateProfileName: FreeShow
-        codeSigningAccountName: FreeShow
+    # azureSignOptions:
+    #     publisherName: Live Church Solutions
+    #     endpoint: https://wus2.codesigning.azure.net/
+    #     certificateProfileName: FreeShow
+    #     codeSigningAccountName: FreeShow
 
 # linux
 
