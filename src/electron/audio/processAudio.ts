@@ -1,9 +1,9 @@
 import type { OpusEncoder as TOpusEncoder } from "@discordjs/opus"
-import { BlackmagicSender } from "../blackmagic/BlackmagicSender"
+import { BlackmagicBridge as BlackmagicSender } from "../blackmagic/BlackmagicBridge"
 import { NdiSender } from "../ndi/NdiSender"
 import { OmtSender } from "../omt/OmtSender"
 import { getServerData, toServer } from "../servers"
-import { RtmpStreamer } from "../streaming/RtmpStreamer"
+import { RtmpBridge as RtmpStreamer } from "../streaming/RtmpBridge"
 import { WebRtcHost } from "../streaming/WebRtcHost"
 import { IcecastSender } from "./IcecastSender"
 
@@ -24,7 +24,7 @@ export function isAudioEnabled(): boolean {
 
 let icecastPcmAccumulator: Buffer = Buffer.alloc(0)
 
-export async function processAudio(buffer: Buffer, sampleRate: number = 48000, targetId?: string, icecast?: any) {
+export async function processAudio(buffer: Buffer, sampleRate = 48000, targetId?: string, icecast?: any) {
     if (!buffer || buffer.length === 0) return
 
     const sr = Number(sampleRate) || 48000
@@ -46,7 +46,7 @@ export async function processAudio(buffer: Buffer, sampleRate: number = 48000, t
 
     const normalizedIcecast = icecast && icecast.enabled !== false ? icecast : null
     const needsIcecast = !!(normalizedIcecast && opusEncoder && (!tid || tid === "icecast"))
-    const needsLegacySinks = (!tid || tid !== "icecast") && (Object.keys(BlackmagicSender.playbackData || {}).length > 0 || !!getServerData("OUTPUT_STREAM")?.sendAudio || WebRtcHost.isRunning() || RtmpStreamer.anyRunning())
+    const needsLegacySinks = (!tid || tid !== "icecast") && (BlackmagicSender.hasOutputs() || !!getServerData("OUTPUT_STREAM")?.sendAudio || WebRtcHost.isRunning() || RtmpStreamer.anyRunning())
 
     if (!needsIcecast && !needsLegacySinks) return
 
@@ -93,7 +93,7 @@ export async function processAudio(buffer: Buffer, sampleRate: number = 48000, t
     }
 }
 
-function convertPlanarFloat32ToInt16Interleaved(buffer: Buffer, channels: number = 2): Buffer {
+function convertPlanarFloat32ToInt16Interleaved(buffer: Buffer, channels = 2): Buffer {
     const totalFloat32 = Math.floor(buffer.length / 4)
     const samplesPerChannel = Math.floor(totalFloat32 / channels)
 
@@ -128,7 +128,7 @@ interface ResampleState {
 }
 let resampleState: ResampleState | null = null
 
-function resamplePcmInt16Stereo(input: Buffer, inSampleRate: number, outSampleRate: number = 48000): Buffer {
+function resamplePcmInt16Stereo(input: Buffer, inSampleRate: number, outSampleRate = 48000): Buffer {
     if (inSampleRate === outSampleRate || !input || input.length === 0) return input
 
     if (!resampleState || resampleState.inSampleRate !== inSampleRate) {

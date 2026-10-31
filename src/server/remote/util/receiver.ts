@@ -1,6 +1,6 @@
 import type { Item, Show } from "../../../types/Show"
 import { sanitizeVerseText } from "../../common/util/scripture"
-import { setError, translate } from "./helpers"
+import { applyThemeColors, setError, translate } from "./helpers"
 import { send } from "./socket"
 import { _, _get, _set, _update, activeTimers, currentScriptureState, overlays, runningActions, scriptureCache, scriptures, timers } from "./stores"
 
@@ -33,17 +33,25 @@ function sanitizeChapterVerses(verses: any) {
 
 export type ReceiverKey = keyof typeof receiver
 export const receiver = {
+    THEME_COLORS: (data: any) => {
+        applyThemeColors(data)
+    },
     PASSWORD: (data: any) => {
         if (data.dictionary) _set("dictionary", data.dictionary)
         let password: boolean = data.password
         _update("password", "required", password)
     },
     ERROR: (data: any) => {
-        if (data === "wrongPass") {
+        const key = data?.key || ""
+        if (key === "wrongPass") {
             setError(translate("remote.wrong_password"))
             localStorage.removeItem("password")
             _update("password", "required", true)
-        } else setError(data)
+        } else if (key === "overLimit") {
+            setError(`${translate(`error.${key}`)} (${data?.max})`)
+        } else {
+            setError(key ? translate(`error.${key}`) : data)
+        }
     },
     LANGUAGE: (data: any) => {
         _.dictionary.update((a) => {
@@ -242,6 +250,11 @@ export const receiver = {
         }
     },
     // SCRIPTURE_CHAPTERS and SCRIPTURE_VERSES are handled by GET_SCRIPTURE's bibleUpdate handling
+    SEARCH_SHOWS: (data: any) => {
+        if (data && data.results !== undefined) {
+            _set("showSearchResults", data)
+        }
+    },
     SEARCH_SCRIPTURE: (data: any) => {
         // Store search results for the search component to use
         if (data.searchResults !== undefined) {

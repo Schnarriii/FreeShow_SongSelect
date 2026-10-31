@@ -24,7 +24,7 @@
     import TimerControls from "../tools/TimerControls.svelte"
     import ClearButtons from "./ClearButtons.svelte"
     import MultiOutputs from "./MultiOutputs.svelte"
-    import PreviewOutputs from "./PreviewOutputs.svelte"
+    import IcecastStatus from "./IcecastStatus.svelte"
     import SpotifyController from "./SpotifyController.svelte"
 
     $: allActiveOutputs = getActiveOutputs($outputs, true, true, true)
@@ -253,8 +253,6 @@
 
 <div id="previewArea" class="main">
     {#if enablePreview}
-        <PreviewOutputs />
-
         <div class="top">
             <MaterialButton class="hide" icon="hide" style="z-index: 2;" title="preview._hide_preview" on:click={() => (enablePreview = false)} />
             <!-- disable before hiding: disableTransitions={!enablePreview} -->
@@ -277,7 +275,7 @@
     {/if}
 
     {#if $activePage === "show"}
-        <div class="section" style="margin-top: 2px;">
+        <div class="section clear-btns" style="margin-top: 2px;">
             <ClearButtons bind:autoChange activeClear={updatedActiveClear} on:update={(e) => (activeClear = e.detail)} />
 
             {#if updatedActiveClear === "background"}
@@ -299,6 +297,7 @@
             {/if}
         </div>
 
+        <IcecastStatus />
         <SpotifyController />
     {/if}
 </div>
@@ -308,6 +307,7 @@
         /* max-height: 50%; */
         flex: 1;
         min-width: 50%;
+        position: relative;
     }
 
     .top {
@@ -355,6 +355,12 @@
         overflow: hidden;
 
         transition: transform 0.2s ease;
+    }
+
+    .section.clear-btns {
+        position: sticky;
+        bottom: 5px;
+        z-index: 10;
     }
 
     .section.float {

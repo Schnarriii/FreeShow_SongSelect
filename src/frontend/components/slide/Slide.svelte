@@ -218,19 +218,20 @@
     }
 
     let profile = getAccess("shows")
+    $: isFake = layoutSlide?.id === "fake_empty"
     $: isGroupLocked = isSlideLocked(showId, layoutSlide.id, show)
-    $: isLocked = show?.locked || isGroupLocked || profile.global === "read" || profile[show?.category || ""] === "read"
+    $: isLocked = isFake || show?.locked || isGroupLocked || profile.global === "read" || profile[show?.category || ""] === "read"
 
     // correct view order based on arranged order in Items.svelte (?.reverse())
     $: itemsList = clone(slide.items) || []
 
     // style template preview
-    $: if ($special.styleTemplatePreview !== false) updateItemsList(slide)
+    $: styleTemplateActive = $special.styleTemplatePreview !== false && allOutputsHasStyleTemplate(show?.reference?.type === "scripture", { $outputs, $styles })
+    $: if (styleTemplateActive) updateItemsList(slide, currentStyle)
     else itemsList = clone(slide.items) || []
-    function updateItemsList(_updater: any = null) {
+    function updateItemsList(_updater: any = null, _style: any = null) {
         // WIP show scripture style preview as well
-        if (!allOutputsHasStyleTemplate(show?.reference?.type === "scripture")) return
-        itemsList = setTemplateStyle({ id: showId, index }, currentStyle, itemsList, outputId, slide?.customDynamicValues)
+        itemsList = setTemplateStyle({ id: showId, index }, currentStyle, clone(slide.items) || [], outputId, slide?.customDynamicValues)
     }
 
     // $: styleTemplate = getStyleTemplate(null, currentStyle)
@@ -284,7 +285,7 @@
         <Actions {slide} {columns} {index} actions={layoutSlide.actions || {}} />
     {/if}
     <!-- content -->
-    <div class="slide context #{isLocked ? 'default' : $focusMode ? 'slideFocus' : name === null ? 'slideChild' : 'slide'}" class:disabled={layoutSlide.disabled} class:afterEnd={endIndex !== null && index > endIndex} class:isDeleteHighlighted style="{style};{isDeleteHighlighted ? `--highlight-color: ${highlightColor};--highlight-bg: ${fadeColor(highlightColor, 0.35)};` : ''}" role="none" on:click>
+    <div class="slide context #{isFake ? 'slideFake' : isLocked ? 'default' : $focusMode ? 'slideFocus' : name === null ? 'slideChild' : 'slide'}" class:disabled={layoutSlide.disabled} class:afterEnd={endIndex !== null && index > endIndex} class:isDeleteHighlighted style="{style};{isDeleteHighlighted ? `--highlight-color: ${highlightColor};--highlight-bg: ${fadeColor(highlightColor, 0.35)};` : ''}" role="none" on:click>
         <div class="hover overlay" />
 
         {#if isDeleteHighlighted}
@@ -371,6 +372,8 @@
                                     clickRevealed={!!output?.clickRevealed}
                                     {centerPreview}
                                     preview
+                                    outputStyle={styleTemplateActive ? currentStyle : null}
+                                    styleTemplateUsed={styleTemplateActive}
                                     chords={item.chords?.enabled}
                                 />
                             {/if}

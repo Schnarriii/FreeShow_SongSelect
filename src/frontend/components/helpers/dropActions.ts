@@ -17,6 +17,7 @@ import { addSlideAction, getActionTriggerId, isMatchingSlideAction } from "../ac
 import { getActiveScripturesContent, getReferenceText, getScriptureShow, getScriptureSlidesNew } from "../drawer/bible/scripture"
 import { getVimeoData, getYouTubeData, trimPlayerId } from "../drawer/player/playerHelper"
 import { addItem, DEFAULT_ITEM_STYLE } from "../edit/scripts/itemHelpers"
+import { addStageItem } from "../stage/stage"
 import { clone, removeDuplicates } from "./array"
 import { projectDropFolders } from "./drop"
 import { history, historyAwait } from "./history"
@@ -490,36 +491,51 @@ export const dropActions = {
             const slide = ref.type === "child" ? slides[ref.parent!.id] : slides[ref.id]
             const activeTab: string | null = get(drawerTabsData)[get(activeDrawerTab)]?.activeSubTab
 
+            const items = clone(slides[ref.id].items || []).map((item: Item) => {
+                delete item.autoFontSize
+                return item
+            })
+
             const data = {
                 name: slide.group || "",
                 color: slide.color || "",
                 category: activeTab === "all" || activeTab === "unlabeled" ? null : activeTab,
-                items: slides[ref.id].items
+                items
             }
             history({ id: "UPDATE", newData: { data }, location: { page: "drawer", id: drop.id.slice(0, -1) } })
         })
     },
     overlays: ({ drag, drop }: Data) => dropActions.templates({ drag, drop }),
     edit: ({ drag }: Data) => {
+        const isStage = get(activePage) === "stage"
+
         if (drag.id === "media" || drag.id === "files") {
-            drag.data.forEach((file) => addItem("media", null, { src: file.path || window.api.showFilePath(file) }))
+            drag.data.forEach((file) => {
+                const src = file.path || window.api.showFilePath(file) || (typeof file === "string" ? file : "")
+                if (isStage) addStageItem("media", { src })
+                else addItem("media", null, { src })
+            })
         } else if (drag.id === "camera" || drag.id === "screen" || drag.id === "ndi" || drag.id === "omt" || drag.id === "blackmagic") {
             drag.data.forEach((device) => {
-                addItem("camera", null, {
-                    device: {
-                        id: device.id,
-                        name: device.name || "",
-                        type: device.type || drag.id,
-                        group: device.cameraGroup || device.group || ""
-                    }
-                })
+                const deviceData = {
+                    id: device.id,
+                    name: device.name || "",
+                    type: device.type || drag.id,
+                    group: device.cameraGroup || device.group || ""
+                }
+                // if (isStage) addStageItem("camera", { device: deviceData })
+                addItem("camera", null, { device: deviceData })
             })
         } else if (drag.id === "global_timer") {
-            drag.data.forEach((a) => addItem("timer", null, { timer: { id: a.id } }))
+            drag.data.forEach((a) => {
+                // if (isStage) addStageItem("timer", { timer: { id: a.id } })
+                addItem("timer", null, { timer: { id: a.id } })
+            })
         } else if (drag.id === "variable") {
             drag.data.forEach((a) => {
                 const name = getVariableNameId(a.name || "")
                 if (!name) return
+                // if (isStage) addStageItem("text", {}, `{$${name}}`)
                 addItem("text", null, {}, `{$${name}}`)
             })
         }
@@ -1101,18 +1117,6 @@ const slideDrop = {
 
         history.newData = { index, data: slides, layouts }
 
-        return history
-    },
-    midi: ({ drag, drop }: Data, history: History) => {
-        // WIP not in use:
-        history.id = "SHOW_LAYOUT"
-
-        const ref = getLayoutRef()[drop.index!]
-        const data: any = ref?.data?.actions || {}
-        const key = drag.data[0].type === "in" ? "receiveMidi" : "sendMidi"
-        data[key] = drag.data[0].id
-
-        history.newData = { key: "actions", data, indexes: [drop.index] }
         return history
     },
     action: ({ drag, drop }: Data, history: History, keys?: Keys) => {

@@ -3,19 +3,21 @@ import type { ContentProviderId } from "../../electron/contentProviders/base/typ
 import { OUTPUT, STARTUP } from "../../types/Channels"
 import { Main } from "../../types/IPC/Main"
 import { checkStartupActions } from "../components/actions/actions"
+import { syncIcsCalendars } from "../components/drawer/calendar/calendars"
 import { getTimeFromInterval } from "../components/helpers/time"
 import { requestMain, requestMainMultiple, sendMain, sendMainMultiple } from "../IPC/main"
 import { cameraManager } from "../media/cameraManager"
 import { activePopup, activeProfile, alertMessage, cachePath, cloudSyncData, contentProviderData, currentWindow, dataPath, deviceId, driveKeys, isDev, loaded, loadedState, os, profiles, providerConnections, shows, special, version, windowState } from "../stores"
 import { startTracking } from "./analytics"
+import { setupCloudSync } from "./cloudSync"
 import { wait, waitUntilValueIsDefined } from "./common"
 import { getDefaultElements } from "./createData"
 import { setLanguage } from "./language"
-import { setupCloudSync } from "./cloudSync"
 import { storeSubscriber } from "./listeners"
+import { renderSignatureHook } from "./renderSignature"
 import { autoOpenLastUsedProfile, openProfileByName } from "./profile"
 import { receiveOUTPUTasOUTPUT, remoteListen, setupMainReceivers } from "./receivers"
-import { destroy, receive, send } from "./request"
+import { destroy, receive, send, setBeforeOutputSend } from "./request"
 import { save, unsavedUpdater } from "./save"
 
 let initialized = false
@@ -41,7 +43,8 @@ export async function startup() {
             if (type) loaded.set(true)
 
             if (type === "pdf") return
-            if (type === "output") {
+            // a media window takes the same data as an output
+            if (type === "output" || type === "media") {
                 startupOutput()
                 return
             }
@@ -52,6 +55,8 @@ export async function startup() {
         },
         "startup"
     )
+
+    window.api.send(STARTUP, { channel: "READY" })
 }
 
 async function startupMain() {
@@ -67,6 +72,8 @@ async function startupMain() {
     if (startupProfile) openProfileByName(startupProfile)
     else autoOpenLastUsedProfile()
 
+    // before storeSubscriber, so the signatures see every message
+    setBeforeOutputSend(renderSignatureHook)
     storeSubscriber()
     remoteListen()
 
@@ -83,10 +90,14 @@ async function startupMain() {
     // }
 
     await wait(2000)
+
     autoBackup()
     await wait(3000)
+
     unsavedUpdater()
+    windowFocusListener()
     cameraManager.initializeCameraWarming()
+    syncIcsCalendars()
 
     // CHECK LISTENERS
     // console.log(window.api.getListeners())
@@ -94,6 +105,20 @@ async function startupMain() {
     // RAM MONITOR (every 10 minutes)
     setTimeout(() => checkRamUsage(), 10000)
     setInterval(() => checkRamUsage(), 600000)
+}
+
+// window focus state
+function windowFocusListener() {
+    if (typeof window === "undefined") return
+
+    const updateFocus = () => {
+        if (document.hasFocus()) document.body.classList.remove("unfocused")
+        else document.body.classList.add("unfocused")
+    }
+
+    window.addEventListener("focus", updateFocus)
+    window.addEventListener("blur", updateFocus)
+    updateFocus()
 }
 
 async function checkRamUsage() {
@@ -115,12 +140,18 @@ function autoBackup() {
 }
 
 const lastProviderSyncs: Partial<Record<ContentProviderId, number>> = {}
-export function contentProviderSync(startup = false, remainingOnly = false) {
+export async function contentProviderSync(startup = false, remainingOnly = false) {
     const isCloudSyncEnabled = get(cloudSyncData).enabled && get(cloudSyncData).id
 
-    if (startup && isCloudSyncEnabled && !remainingOnly) {
-        setupCloudSync(true)
+    if (isCloudSyncEnabled && !remainingOnly) {
+        setupCloudSync(startup)
         return
+    }
+
+    // on startup, wait until data is loaded
+    if (!Object.keys(get(shows)).length) {
+        await waitUntilValueIsDefined(() => get(loadedState).includes("synced_settings"), 200, 8000) // same await in getStoredData
+        await waitUntilValueIsDefined(() => Object.keys(get(shows)).length, 50, 2000)
     }
 
     const providers = [

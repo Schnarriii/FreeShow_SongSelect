@@ -3,7 +3,7 @@
     import type { Transition } from "../../../../types/Show"
     import OutputTransition from "../transitions/OutputTransition.svelte"
     import { onDestroy } from "svelte"
-    import { encodeFilePath } from "../../helpers/media"
+    import { encodeFilePath, locateMediaFile } from "../../helpers/media"
 
     export let slide
     export let currentStyle
@@ -34,11 +34,14 @@
 
         renderTask?.cancel()
 
-        if (loadedPath !== currentPath || !loadedDoc) {
+        const located = await locateMediaFile(currentPath)
+        const targetPath = located?.path || currentPath
+
+        if (loadedPath !== targetPath || !loadedDoc) {
             loadingTask?.destroy()
-            loadingTask = getDocument(encodeFilePath(currentPath))
+            loadingTask = getDocument(encodeFilePath(targetPath))
             loadedDoc = await loadingTask.promise
-            loadedPath = currentPath
+            loadedPath = targetPath
         }
         if (!loadedDoc || canvas !== canvasElem) return
 
@@ -74,7 +77,7 @@
 
 {#key update}
     <OutputTransition {transition} inTransition={transition.in} outTransition={transition.out}>
-        <canvas bind:this={canvasElem} />
+        <canvas bind:this={canvasElem} data-source="{slide?.id}_{slide?.page}" />
     </OutputTransition>
 {/key}
 

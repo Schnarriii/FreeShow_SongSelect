@@ -13,10 +13,11 @@ import { updateOut } from "../components/helpers/showActions"
 import { _show } from "../components/helpers/shows"
 import { clearAll } from "../components/output/clear"
 import { REMOTE } from "./../../types/Channels"
-import { actions, actionTags, activePage, activeProject, activeShow, activeTimers, audioChannelsData, audioRouting, categories, connections, dictionary, folders, language, openedFolders, outLocked, outputs, overlayCategories, overlays, playerVideos, projects, remotePassword, runningActions, scriptures, shows, showsCache, styles, templateCategories, templates, timers, variables, variableTags } from "./../stores"
+import { actions, actionTags, activePage, activeProject, activeShow, activeTimers, audioChannelsData, audioRouting, categories, connections, dictionary, folders, language, openedFolders, outLocked, outputs, overlayCategories, overlays, playerVideos, projects, runningActions, scriptures, serverData, shows, showsCache, sortedShowsList, styles, templateCategories, templates, theme, themes, timers, variables, variableTags } from "./../stores"
 import { lastClickTime } from "./common"
 import { translateText } from "./language"
 import { send } from "./request"
+import { formatSearch, showSearch } from "./search"
 import { sendData, setConnectedState } from "./sendData"
 
 export function getFilteredAudioChannels() {
@@ -33,9 +34,12 @@ let currentOut = ""
 let loadingShow = ""
 export const receiveREMOTE: any = {
     PASSWORD: (msg: any) => {
+        sendThemeToRemote()
+
+        const pass = get(serverData)?.remote?.password || ""
         msg.data = {
             dictionary: get(dictionary),
-            password: !!get(remotePassword).length
+            password: !!pass.length
         }
         if (msg.data.password) return msg
 
@@ -48,7 +52,10 @@ export const receiveREMOTE: any = {
         return msg
     },
     ACCESS: (msg: any) => {
-        if (get(remotePassword).length && msg.data !== get(remotePassword)) return { id: msg.id, channel: "ERROR", data: "wrongPass" }
+        const pass = get(serverData)?.remote?.password || ""
+        if (pass.length && msg.data !== pass) return { id: msg.id, channel: "ERROR", data: { key: "wrongPass" } }
+
+        sendThemeToRemote()
 
         send(REMOTE, ["LANGUAGE"], { lang: get(language), strings: get(dictionary) })
 
@@ -82,6 +89,21 @@ export const receiveREMOTE: any = {
 
         openShow(showID)
         return msg
+    },
+    // sync remote with the app active show for a short time (e.g. after next/previous changed project item)
+    ACTIVE_SHOW: (msg: any) => {
+        let done = false
+        let unsubscribe: (() => void) | null = null
+        const timeout = setTimeout(() => unsubscribe?.(), 2000)
+
+        unsubscribe = activeShow.subscribe((active) => {
+            if (done || !active?.id || (active.type || "show") !== "show" || active.id === msg.data) return
+            done = true
+
+            clearTimeout(timeout)
+            setTimeout(() => unsubscribe?.())
+            sendData(REMOTE, { id: msg.id, channel: "SHOW", data: active.id })
+        })
     },
     OUT: async (msg: any) => {
         if (get(outLocked)) return
@@ -222,6 +244,21 @@ export const receiveREMOTE: any = {
             chapters: []
         }))
         msg.data.bible = { books: mappedBooks }
+        return msg
+    },
+    SEARCH_SHOWS: (msg: ClientMessage) => {
+        const { query = "", limit = 500 } = msg.data || {}
+        const trimmed = typeof query === "string" ? query.trim() : ""
+        if (!trimmed || formatSearch(trimmed).length <= 1) {
+            msg.data = { query: trimmed, results: [] }
+            return msg
+        }
+
+        const allShows = get(sortedShowsList) || []
+        const matches = showSearch(trimmed, allShows)
+        // Return matching show IDs and scores to keep payload light
+        const results = matches.slice(0, limit).map((s) => ({ id: s.id, match: s.match }))
+        msg.data = { query: trimmed, results }
         return msg
     },
     SEARCH_SCRIPTURE: async (msg: ClientMessage) => {
@@ -365,10 +402,18 @@ export async function initializeRemote(id: string) {
     sendData(REMOTE, { id, channel: "OUT_DATA" })
 
     // Send additional data
+    sendThemeToRemote()
     send(REMOTE, ["SCRIPTURE"], get(scriptures))
     send(REMOTE, ["CATEGORIES"], get(categories))
     send(REMOTE, ["AUDIO_ROUTING"], getFilteredAudioChannels())
     send(REMOTE, ["AUDIO_CHANNELS_DATA"], get(audioChannelsData))
+}
+
+function sendThemeToRemote() {
+    const currentThemeObj = get(themes)[get(theme)]
+    if (currentThemeObj?.colors) {
+        window.api.send(REMOTE, { id: null, channel: "THEME_COLORS", data: currentThemeObj.colors })
+    }
 }
 
 export async function convertBackgrounds(show: Show, noLoad = false, init = false) {
@@ -411,7 +456,7 @@ export async function convertBackgrounds(show: Show, noLoad = false, init = fals
 
 function openShow(id: string) {
     if (get(activePage) !== "show") return
-    if (!get(shows)[id]) return
+    if (!get(shows)[id] || get(activeShow)?.id === id) return
     // don't open if last interaction was less than 20 seconds ago
     if (Date.now() - lastClickTime < 20000) return
 

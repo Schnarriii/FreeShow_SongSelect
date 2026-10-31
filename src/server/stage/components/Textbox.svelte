@@ -1,9 +1,9 @@
 <script lang="ts">
-    import { onDestroy, onMount } from "svelte"
+    import { onDestroy, onMount, tick } from "svelte"
     import type { Item } from "../../../types/Show"
     import Button from "../../common/components/Button.svelte"
     import Icon from "../../common/components/Icon.svelte"
-    import autosize from "../../common/util/autosize"
+    import autosize, { getAutoSizeOptions } from "../../common/util/autosize"
     import { createVirtualBreaks } from "../../common/util/show"
     import { getStyles } from "../../common/util/style"
     import { getDynamicValue, replaceDynamicValues } from "../helpers/show"
@@ -63,21 +63,31 @@
     $: if (autoSize && loaded) calculateAutosize()
     $: if ($variables) setTimeout(calculateAutosize, 50)
     let loopStop: any = null
+    let pendingAutosize = false
     function calculateAutosize() {
-        if (loopStop || !alignElem || !autoSize) return
-        loopStop = setTimeout(() => (loopStop = null), 200)
+        if (!alignElem || !autoSize) return
+        if (loopStop) {
+            pendingAutosize = true
+            return
+        }
+        loopStop = setTimeout(() => {
+            loopStop = null
+            if (pendingAutosize) {
+                pendingAutosize = false
+                calculateAutosize()
+            }
+        }, 100)
 
         let type = item?.textFit || "shrinkToFit"
-        let defaultFontSize
-        let maxFontSize
 
-        if (stageItem?.type !== "text") type = stageItem?.textFit || "growToFit"
-        let itemFontSize = Number(getStyles(stageItem?.style, true)?.["font-size"] || "") || 100
-        defaultFontSize = itemFontSize
-        if (type === "growToFit" && itemFontSize !== 100) maxFontSize = itemFontSize
+        if (Object.keys(stageItem).length && stageItem?.type !== "text") type = stageItem?.textFit || "growToFit"
+        else if (Object.keys(stageItem).length) type = stageItem?.textFit || "shrinkToFit"
+        let itemFontSize = getStyles((Object.keys(stageItem).length ? stageItem : item)?.style, true)?.["font-size"]
+        const isTextboxItem = (item.type || "text") === "text"
+        const { defaultFontSize, maxFontSize } = getAutoSizeOptions(type, itemFontSize, isTextboxItem)
 
         let textQuery = ""
-        if ((item.type || "text") === "text") {
+        if (isTextboxItem) {
             // elem = elem.querySelector(".align")
             textQuery = ".lines .break span"
         } else {
@@ -292,6 +302,17 @@
     function update() {
         if (!hasDynamicValues) return
         updateDynamic++
+    }
+
+    const previousDynamicValues: { [key: string]: string } = {}
+    async function resolveDynamic(val: string) {
+        const res = await replaceDynamicValues(val)
+        if (previousDynamicValues[val] !== undefined && previousDynamicValues[val] !== res) {
+            await tick()
+            calculateAutosize()
+        }
+        previousDynamicValues[val] = res
+        return res
     }
 
     onDestroy(() => {
@@ -528,11 +549,14 @@
                             <div class="break" class:reveal={item?.lineReveal && revealed < i} style="{style ? lineStyle : ''}{style ? line.align : ''}">
                                 {#each line.text || [] as text}
                                     {@const value = text.value?.replaceAll("\n", "<br>") || "<br>"}
+                                    <!-- remove font size it it's 0 -->
+                                    {@const textStyle = text.style?.replace(/font-size:\s*0(?:px)?;?/gi, "") || ""}
+
                                     {#key updateDynamic}
-                                        {#await replaceDynamicValues(value)}
-                                            <span style="{style ? text.style + (fontSize ? 'font-size: ' + fontSize + 'px;' : '') : 'font-size: ' + fontSize + 'px;'}{customStyle}">{@html getDynamicValue(value)}</span>
+                                        {#await resolveDynamic(value)}
+                                            <span style="{style ? textStyle + (fontSize ? 'font-size: ' + fontSize + 'px;' : '') : 'font-size: ' + fontSize + 'px;'}{customStyle}">{@html getDynamicValue(value)}</span>
                                         {:then newValue}
-                                            <span style="{style ? text.style + (fontSize ? 'font-size: ' + fontSize + 'px;' : '') : 'font-size: ' + fontSize + 'px;'}{customStyle}">{@html newValue}</span>
+                                            <span style="{style ? textStyle + (fontSize ? 'font-size: ' + fontSize + 'px;' : '') : 'font-size: ' + fontSize + 'px;'}{customStyle}">{@html newValue}</span>
                                         {/await}
                                     {/key}
                                 {/each}

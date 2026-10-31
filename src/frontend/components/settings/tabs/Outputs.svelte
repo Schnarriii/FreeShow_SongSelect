@@ -7,7 +7,7 @@
     import type { Output, RtmpDestination } from "../../../../types/Output"
     import { AudioAnalyser } from "../../../audio/audioAnalyser"
     import { requestMain } from "../../../IPC/main"
-    import { activePage, activePopup, activeStage, activeStyle, alertMessage, currentOutputSettings, ndiData, omtData, outputDisplay, outputs, rtmpStatus, saved, settingsTab, stageShows, styles, toggleOutputEnabled } from "../../../stores"
+    import { activePage, activePopup, activeStage, activeStyle, alertMessage, currentOutputSettings, ndiData, omtData, os, outputDisplay, outputs, rtmpStatus, saved, settingsTab, stageShows, styles, toggleOutputEnabled } from "../../../stores"
     import { newToast } from "../../../utils/common"
     import { translateText } from "../../../utils/language"
     import { destroy, receive, send } from "../../../utils/request"
@@ -75,6 +75,8 @@
             if (out.enabled) {
                 // Recreate window for options fixed at creation (transparency, invisibility, capture/OSR mode)
                 const recreateKeys = ["transparent", "invisible", "ndi", "omt", "webrtc", "rtmp", "blackmagic"]
+                // macOS: always on top outputs are a different window type (panel)
+                if ($os.platform === "darwin") recreateKeys.push("alwaysOnTop")
                 if (recreateKeys.includes(key)) {
                     send(OUTPUT, ["CREATE"], { id: outputId, ...out })
                 } else if (key === "alwaysOnTop") {
@@ -210,6 +212,11 @@
 
     $: if (currentOutput?.rtmp && encoderOptions.length === 1) loadEncoders()
     $: if (currentOutput?.rtmp && !currentOutput?.rtmpData?.destinations?.length) addDestination()
+
+    const rateControlOptions = [
+        { value: "cbr", label: "CBR", data: "Constant Bitrate" },
+        { value: "vbr", label: "VBR", data: "Variable Bitrate" }
+    ]
 
     // RTMP destinations
 
@@ -371,7 +378,6 @@
 {/if}
 
 <!-- WIP toggle fullscreen (Mac) ?? Only working one time for some reason -->
-<!-- WIP toggle visibleOnAllWorkspaces (Mac) -->
 
 {#if !currentOutput?.invisible}
     <!-- window -->
@@ -489,7 +495,11 @@
     {/if}
     <InputRow>
         <MaterialDropdown label="settings.frame_rate" value={currentOutput.rtmpData?.fps?.toString() || "30"} defaultValue="30" options={framerates} on:change={(e) => updateRtmpData(e.detail, "fps")} />
+    </InputRow>
+
+    <InputRow>
         <MaterialTextInput label="settings.bitrate (kbps)" value={currentOutput.rtmpData?.bitrate?.toString() || "4000"} defaultValue="4000" placeholder="4000" on:change={(e) => updateRtmpData(e.detail, "bitrate")} />
+        <MaterialDropdown label="actions.mode" value={currentOutput.rtmpData?.rateControl || "cbr"} options={rateControlOptions} on:change={(e) => updateRtmpData(e.detail, "rateControl")} />
     </InputRow>
 
     <InputRow style="margin-bottom: 10px;">
@@ -516,8 +526,8 @@
                     </InputRow>
                 {/if}
 
-                <MaterialTextInput label="Stream URL" value={destination.url} placeholder="e.g. rtmp://a.rtmp.youtube.com/live2" on:change={(e) => updateDestination(destination.id, "url", e.detail)} pasteBtn />
-                <MaterialTextInput label="Stream key" value={destination.key} type="password" on:change={(e) => updateDestination(destination.id, "key", e.detail)} pasteBtn />
+                <MaterialTextInput label="Stream URL" value={destination.url} placeholder="e.g. rtmp://a.rtmp.youtube.com/live2" disabled={currentOutput.rtmpData?.streaming} on:change={(e) => updateDestination(destination.id, "url", e.detail)} pasteBtn />
+                <MaterialTextInput label="Stream key" value={destination.key} type="password" disabled={currentOutput.rtmpData?.streaming} on:change={(e) => updateDestination(destination.id, "key", e.detail)} pasteBtn />
 
                 <!-- kept visible after recovery: a destination that reconnects repeatedly still looks
                      "live" between drops, so the count is the only signal that it is struggling -->

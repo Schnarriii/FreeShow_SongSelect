@@ -10,6 +10,7 @@
     import { exportProject } from "../export/project"
     import { shareProjectLink } from "../export/projectLink"
     import { clone, keysToID, removeDuplicateValues, sortByName } from "../helpers/array"
+    import { duplicateShow } from "../helpers/clipboard"
     import { history } from "../helpers/history"
     import { getDefaultProjectName, getProjectName, projectReplacers } from "../helpers/historyHelpers"
     import Icon from "../helpers/Icon.svelte"
@@ -22,7 +23,7 @@
     import MaterialToggleSwitch from "../inputs/MaterialToggleSwitch.svelte"
     import Autoscroll from "../system/Autoscroll.svelte"
     import DropArea from "../system/DropArea.svelte"
-    import { getRecentlyUsedProjects, openProject } from "./project"
+    import { getRecentlyUsedProjects, isProjectLinked, openProject } from "./project"
     import ProjectContentList from "./ProjectContentList.svelte"
     import ProjectList from "./ProjectList.svelte"
 
@@ -92,7 +93,7 @@
     $: projectActive = !$projectView && $activeProject !== null
     $: currentProject = $activeProject ? $projects[$activeProject] : null
     $: currentProjectPcoFolderId = $activeProject ? ($contentProviderData?.planningcenter?.availablePlans as { planId: string; serviceTypeId: string }[] | undefined)?.find((p) => p.planId === $activeProject)?.serviceTypeId : undefined
-    $: currentProjectIsOnStage = !!$providerConnections.onstage && $activeProject?.startsWith("onstage_")
+    $: currentProjectIsOnStage = !!$providerConnections.onstage && (currentProject?.origin === "onstage" || $activeProject?.startsWith("onstage_"))
 
     function createProject(folder = false) {
         let parent = interactedFolder || ($folders[currentProject?.parent || ""] ? currentProject?.parent || "/" : "/")
@@ -160,7 +161,7 @@
 
     // TEMPLATE
 
-    function createFromTemplate(e: any, id: string) {
+    async function createFromTemplate(e: any, id: string) {
         // prevent extra single click on (template) double click
         let { ctrl, doubleClick, target } = e.detail
 
@@ -176,6 +177,21 @@
         else project.name = getProjectName(project.parent) // use default (auto) project name
 
         let projectId = uid()
+
+        // duplicate any placeholder shows
+        if (project.shows?.length) {
+            project.shows = await Promise.all(
+                project.shows.map(async (item) => {
+                    if (item.type === "show_placeholder" && item.data?.showId) {
+                        // const customName = getProjectName(item.name) - allow {} values...?
+                        const newShowId = await duplicateShow(item.data.showId)
+                        return { id: newShowId, type: "show" }
+                    }
+                    return item
+                })
+            )
+        }
+
         history({ id: "UPDATE", newData: { data: project }, oldData: { id: projectId }, location: { page: "show", id: "project" } })
         setTimeout(() => activeRename.set("project_" + projectId))
     }
@@ -497,7 +513,7 @@
 
                 {#if isVisible}
                     <MaterialButton style="width: 100%;padding: 0.08rem 0.65rem;font-weight: normal;" title="actions.id_select_project: <b>{project.name}</b>" on:click={(e) => openRecentlyUsed(e, project.id)} isActive={$activeProject === project.id} tab>
-                        <Icon id="project" />
+                        <Icon id={isProjectLinked($projects[project.id], project.id, $contentProviderData) ? "cloud" : "project"} white={$projects[project.id]?.archived} />
                         <HiddenInput value={project.name} id={"project_" + project.id} allowEdit={false} />
                     </MaterialButton>
                 {/if}

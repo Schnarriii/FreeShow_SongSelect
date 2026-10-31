@@ -428,11 +428,11 @@
 
                 const videoType = getMediaLayerType(file.path, mediaStyle)
 
-                // clear slide text
-                if (videoType === "foreground") clearSlide()
+                const ignoreLayer = videoType === "foreground"
+                if (ignoreLayer) clearSlide()
 
                 const type = getMediaType(getExtension(file.path))
-                setOutput("background", { path: file.path, ...mediaStyle, type, loop: false, muted: false })
+                setOutput("background", { path: file.path, ...mediaStyle, type, loop: false, muted: false, ignoreLayer })
                 return
             }
 
@@ -705,7 +705,8 @@
             </FloatingInputs>
         {:else if hasAudio.count}
             <FloatingInputs side="left" onlyOne>
-                <MaterialButton icon="autofill" on:click={hasAudio.exists ? openAudioFolder : createAudioFolder}>
+                <MaterialButton on:click={hasAudio.exists ? openAudioFolder : createAudioFolder}>
+                    <Icon id="autofill" gradient />
                     <p>
                         <T id="audio.{hasAudio.exists ? 'open_audio_folder' : 'create_audio_folder'}" />
                         <span style="opacity: 0.5;font-size: 0.8em;margin-left: 5px;">{hasAudio.count}</span>

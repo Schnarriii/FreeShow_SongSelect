@@ -1,7 +1,48 @@
 <script lang="ts">
     import { AudioPlayer } from "../../audio/audioPlayer"
     import { cameraManager } from "../../media/cameraManager"
-    import { actions, activeEdit, activeProject, activeRecording, activeShow, categories, colorbars, dictionary, disabledServers, drawerTabsData, effects, effectsLibrary, events, forceClock, globalTags, livePrepare, media, mediaFolders, os, outputs, overlayCategories, overlays, projects, redoHistory, scriptures, selected, shows, showsCache, slideDeleteHighlight, slidesOptions, special, spellcheck, stageShows, styles, templateCategories, timers, topContextActive, undoHistory } from "../../stores"
+    import {
+        actions,
+        activeEdit,
+        activePage,
+        activeProject,
+        activeRecording,
+        activeShow,
+        categories,
+        colorbars,
+        dictionary,
+        disabledServers,
+        drawerTabsData,
+        effects,
+        effectsLibrary,
+        events,
+        forceClock,
+        globalTags,
+        livePrepare,
+        media,
+        mediaFolders,
+        os,
+        outputs,
+        overlayCategories,
+        overlays,
+        projects,
+        redoHistory,
+        scenes,
+        scriptures,
+        selected,
+        shows,
+        showsCache,
+        slideDeleteHighlight,
+        slidesOptions,
+        special,
+        spellcheck,
+        stageShows,
+        styles,
+        templateCategories,
+        timers,
+        topContextActive,
+        undoHistory
+    } from "../../stores"
     import { translateText } from "../../utils/language"
     import { closeContextMenu } from "../../utils/shortcuts"
     import { keysToID } from "../helpers/array"
@@ -126,6 +167,24 @@
             enabled = isEnabled
             menu.label = isEnabled ? "actions.enable" : "actions.disable"
         },
+        hide: () => {
+            let isHidden = false
+            if (contextElem?.classList.value.includes("#effect_item")) {
+                const effectId = $activeEdit.id || ""
+                const effect = $effects[effectId]
+                const idxStr = contextElem.dataset.index ?? contextElem.id?.replace(/^#/, "")
+                const index = idxStr !== undefined ? Number(idxStr) : -1
+                if (index >= 0 && effect?.items?.[index]?.hidden) isHidden = true
+            } else if (contextElem?.classList.value.includes("#scene_overlay")) {
+                const sceneId = $activeEdit.id || ""
+                const scene = $scenes[sceneId]
+                const overlayId = contextElem.dataset.overlayId || $selected.data?.[0]?.id || ""
+                if (overlayId && scene?.content?.hiddenOverlays?.includes(overlayId)) isHidden = true
+            }
+
+            enabled = isHidden
+            if (menu) menu.label = isHidden ? "profile.show" : "profile.hide"
+        },
         display_tags: () => {
             enabled = $special.displayTags
             hide = !Object.keys($globalTags).length
@@ -192,7 +251,7 @@
             }, 20)
         },
         insert_virtual_break: () => {
-            if (window.getSelection()?.toString()) hide = true
+            if (window.getSelection()?.toString() || ($activeEdit.type || "show") !== "show" || $activePage !== "edit") hide = true
         },
         createSlideshow: () => {
             hide = $selected.id !== "media" || $selected.data.length < 2
@@ -425,7 +484,7 @@
         // don't hide context menu
         const keepOpen = ["uppercase", "lowercase", "capitalize", "trim"] // "dynamic_values" (caret position is lost)
         if (keepOpen.includes(id)) return
-        const keepOpenToggle = ["enabled_drawer_tabs", "tag_set", "tag_filter", "media_tag_set", "media_tag_filter", "player_tag_set", "player_tag_filter", "action_tag_set", "action_tag_filter", "variable_tag_set", "variable_tag_filter", "timer_tag_set", "timer_tag_filter", "bind_slide", "bind_item", "bind_scene"]
+        const keepOpenToggle = ["enabled_drawer_tabs", "tag_set", "tag_filter", "media_tag_set", "media_tag_filter", "player_tag_set", "player_tag_filter", "action_tag_set", "action_tag_filter", "variable_tag_set", "variable_tag_filter", "timer_tag_set", "timer_tag_filter", "bind_slide", "bind_item", "bind_effect", "bind_scene"]
         if (keepOpenToggle.includes(id)) {
             enabled = !enabled
             return

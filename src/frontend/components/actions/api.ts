@@ -19,7 +19,7 @@ import { startMetronome } from "../drawer/audio/metronome"
 import { getInteraction, startInteraction, stopInteraction } from "../drawer/pages/interactions"
 import { pauseAllTimers } from "../drawer/timers/timers"
 import { getSlideThumbnail, getThumbnail } from "../helpers/media"
-import { changeStageOutputLayout, startCamera, startRtmpStreaming, startScene, startScreen, startStreaming, stopRtmpStreaming, stopStreaming, toggleOutputs } from "../helpers/output"
+import { changeStageOutputLayout, setOutput, startCamera, startRtmpStreaming, startScene, startScreen, startStreaming, stopRtmpStreaming, stopStreaming, toggleOutputs } from "../helpers/output"
 import { OutputHelper } from "../helpers/OutputHelper"
 import { changeOutputStyle, playSlideTimers, randomSlide, replaceDynamicValues, selectProjectShow, sendMidi, startShowSync } from "../helpers/showActions"
 import { startTimerById, startTimerByName, stopTimers } from "../helpers/timerTick"
@@ -86,6 +86,7 @@ import {
     toggleLogSongUsage,
     toggleMediaLoop,
     toggleMediaMute,
+    toggleOutputRecording,
     toggleSttListening,
     updateVolumeValues,
     videoSeekTo
@@ -139,7 +140,7 @@ export type API_layout = { showId: string; layoutId: string }
 export type API_slide_thumbnail = { showId?: string; layoutId?: string; index?: number }
 export type API_seek = { id?: string; seconds: number }
 export type API_media = { path: string; index?: number; data?: any }
-export type API_scripture = { id?: string; reference: string }
+export type API_scripture = { id?: string; reference: string; play?: boolean }
 export type API_toggle = { id: string; value?: boolean }
 export type API_toggle_specific = { value?: boolean }
 export type API_toggle_id = { id?: string; value?: boolean }
@@ -220,6 +221,7 @@ export const API_ACTIONS = {
     index_select_project_item: (data: API_index) => selectProjectShow(data.index), // BC
     name_start_project_item: (data: API_strval) => startProjectItemByName(data.value),
     mark_active_as_played: (data: API_toggle_specific) => markItemsAsPlayed("active", data.value),
+    unmark_all_as_played: () => markItemsAsPlayed("all", false),
 
     // SHOWS
     id_select_show: (data: API_id) => selectShowById(data.id),
@@ -249,6 +251,8 @@ export const API_ACTIONS = {
     restore_output: () => restoreOutput(), // BC
     clear_all: () => clearAll(true), // BC
     clear_background: () => clearBackground(), // BC
+    // put a live NDI/OMT source on an output's background
+    show_live_source: (data: { id: string; type?: "ndi" | "omt"; outputId?: string }) => setOutput("background", { id: data.id, type: data.type || "omt" }, false, data.outputId || ""),
     clear_slide: () => clearSlide(), // BC
     clear_overlays: () => clearOverlays(), // BC
     clear_overlay: (data: API_id) => clearOverlay(data.id),
@@ -285,6 +289,8 @@ export const API_ACTIONS = {
     stop_webrtc_stream: (data: API_id_optional) => stopStreaming(data.id),
     start_rtmp_stream: (data: API_id_optional) => startRtmpStreaming(data.id),
     stop_rtmp_stream: (data: API_id_optional) => stopRtmpStreaming(data.id),
+    start_output_recording: (data: API_id_optional = {}) => toggleOutputRecording({ ...data, value: true }),
+    stop_output_recording: () => toggleOutputRecording({ value: false }),
     lock_output: (data: API_output_lock) => toggleLock(data), // BC
     toggle_output_windows: (data: API_toggle_specific = {}) => toggleOutputs(null, { state: data.value }), // BC
     toggle_output: (data: API_toggle) => toggleOutputs([data.id], { state: data.value }),

@@ -8,10 +8,11 @@ import { clearAudio } from "../../audio/audioFading"
 import { AudioPlayer } from "../../audio/audioPlayer"
 import { AudioPlaylist } from "../../audio/audioPlaylist"
 import { dbToGain } from "../../audio/dBUtils"
-import { activeDrawerTab, activeEdit, activePage, activeProject, activeShow, activeTimers, audioChannelsData, audioPlaylists, audioRouting, draw, drawSettings, drawTool, folders, groupNumbers, groups, media, openScripture, outLocked, outputs, overlays, pdfImports, playingAudio, playingMetronome, projects, refreshEditSlide, selected, shows, showsCache, sortedShowsList, special, styles, timers, variables } from "../../stores"
+import { activeDrawerTab, activeEdit, activePage, activeProject, activeRecording, activeShow, activeTimers, audioChannelsData, audioPlaylists, audioRouting, draw, drawSettings, drawTool, folders, groupNumbers, groups, media, openScripture, outLocked, outputs, overlays, pdfImports, playingAudio, playingMetronome, projects, refreshEditSlide, selected, shows, showsCache, sortedShowsList, special, styles, timers, variables } from "../../stores"
 import { newToast, triggerFunction } from "../../utils/common"
 import { send } from "../../utils/request"
 import { parseEngScriptureRefToNumbers, resolveScriptureReference } from "../drawer/bible/scripture"
+import { startOutputRecording, stopMediaRecorder } from "../drawer/live/recorder"
 import { getDynamicValue } from "../edit/scripts/itemHelpers"
 import { keysToID, removeDeleted, sortByName } from "../helpers/array"
 import { ondrop } from "../helpers/drop"
@@ -19,7 +20,7 @@ import { dropActions } from "../helpers/dropActions"
 import { history } from "../helpers/history"
 import { setDrawerTabData } from "../helpers/historyHelpers"
 import { encodeFilePath, getExtension, getFileName, getMediaLayerType, getMediaStyle, getMediaType, removeExtension } from "../helpers/media"
-import { getActiveOutputs, getAllEnabledOutputs, getCurrentStyle, getFirstActiveOutput, isOutCleared, setOutput } from "../helpers/output"
+import { getActiveOutputs, getAllEnabledOutputs, getCurrentStyle, getFirstActiveOutput, getFirstOutput, isOutCleared, setOutput } from "../helpers/output"
 import { setRandomValue } from "../helpers/randomValue"
 import { loadShows, setShow } from "../helpers/setShow"
 import { getLabelId, getLayoutRef } from "../helpers/show"
@@ -172,10 +173,10 @@ export async function startProjectItemByName(name: string) {
         const shouldLoop = videoType === "background" ? item.loop || true : false
         const shouldBeMuted = videoType === "background" ? item.muted || true : false
 
-        let out = { path: item.id, muted: shouldBeMuted, loop: shouldLoop, startAt: 0, type: item.type, ...mediaStyle }
+        const ignoreLayer = videoType === "foreground" || (videoType !== "background" && (item.type === "image" || !shouldLoop))
+        if (ignoreLayer) clearSlide()
 
-        // clear slide
-        if (videoType === "foreground" || (videoType !== "background" && (item.type === "image" || !shouldLoop))) clearSlide()
+        let out = { path: item.id, muted: shouldBeMuted, loop: shouldLoop, startAt: 0, type: item.type, ...mediaStyle, ignoreLayer }
 
         setOutput("background", out)
     } else if (item.type === "pdf") {
@@ -342,7 +343,7 @@ export function toggleLock(data: API_output_lock) {
         toggleOutputLock(outputId, typeof data.value === "boolean" ? !data.value : isLocked)
     })
 }
-// similar to PreviewOutputs.svelte
+// similar to OutputPreviewLabel.svelte
 function toggleOutputLock(outputId: string, value: boolean) {
     outputs.update((a) => {
         if (!a[outputId]?.enabled) return a
@@ -362,6 +363,23 @@ function toggleOutputLock(outputId: string, value: boolean) {
 export function moveStageConnection(id: string) {
     if (!id) return
     send(STAGE, ["SWITCH"], { id })
+}
+
+export function toggleOutputRecording(data: API_toggle_id = {}) {
+    if ((data.value as any) === "false") data.value = false
+    if ((data.value as any) === "true") data.value = true
+
+    const outputId = data.id || getFirstActiveOutput()?.id || getFirstOutput()?.id || "default"
+    const isRecording = !!get(activeRecording)
+
+    if (data.value === true) {
+        if (!isRecording) startOutputRecording(outputId)
+    } else if (data.value === false) {
+        if (isRecording) stopMediaRecorder()
+    } else {
+        if (isRecording) stopMediaRecorder()
+        else startOutputRecording(outputId)
+    }
 }
 
 // AUDIO
@@ -708,7 +726,7 @@ export async function startScripture(data: API_scripture) {
     if (data.id) setDrawerTabData("scripture", data.id) // use active if no ID
     activeDrawerTab.set("scripture")
 
-    openScripture.set({ ...ref, play: true })
+    openScripture.set({ ...ref, play: data.play !== false })
 }
 
 // MEDIA

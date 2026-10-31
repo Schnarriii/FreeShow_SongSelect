@@ -63,7 +63,7 @@ import {
 import { newToast, setStatus, triggerFunction } from "../../utils/common"
 import { translateText } from "../../utils/language"
 import { confirmCustom } from "../../utils/popup"
-import { copyFromTextField, isFormField } from "../../utils/shortcutsHelper"
+import { copyFromTextField, cutFromTextField, isFormField } from "../../utils/shortcutsHelper"
 import { removeSlide } from "../context/menuClick"
 import { deleteTimer } from "../drawer/timers/timers"
 import { updateSortedStageItems } from "../edit/scripts/itemHelpers"
@@ -77,7 +77,7 @@ import { getFileName, removeExtension } from "./media"
 import { updateActiveSceneOutputs } from "./output"
 import { select } from "./select"
 import { loadShows } from "./setShow"
-import { checkName, getLayoutRef, removeTemplatesFromShow } from "./show"
+import { checkName, getLayoutRef, removeTemplatesFromShow, updateShowsList } from "./show"
 import { _show } from "./shows"
 
 export function copy(clip: Clipboard | null = null, getData = true, shouldDuplicate = false) {
@@ -168,7 +168,7 @@ export function paste(clip: Clipboard | null = null, extraData: any = {}, custom
 export function cut(clip: Clipboard | null = null) {
     const activeField = document.activeElement
     if (!clip && isFormField(activeField)) {
-        copyFromTextField(activeField)
+        cutFromTextField(activeField)
         return
     }
 
@@ -1070,6 +1070,10 @@ const deleteActions = {
         data.forEach(({ id }) => {
             history({ id: "UPDATE", newData: { id }, location: { page: "settings", id: "settings_profile" } })
         })
+
+        // clear admin user also if all other users are deleted
+        const profileList = Object.keys(get(profiles)).filter((id) => id !== "admin")
+        if (!profileList.length) profiles.set({})
     },
     audio_channel: (data: any) => {
         const channelId = data?.[0]?.id || data?.[0]
@@ -1228,7 +1232,9 @@ const duplicateActions = {
 
                 const projectList = removeDeleted(keysToID(get(projects))).filter((project) => project.parent === oldParent)
                 projectList.forEach((project) => {
-                    newProjects.push({ ...clone(project), parent: newParent })
+                    const cloned = clone(project)
+                    delete cloned.origin
+                    newProjects.push({ ...cloned, parent: newParent })
                 })
             }
 
@@ -1248,6 +1254,7 @@ const duplicateActions = {
             const project = clone(get(projects)[selData.id])
             if (!project) return
 
+            delete project.origin
             const id = uid()
             history({ id: "UPDATE", newData: { data: project, replace: { name: project.name + " 2" } }, oldData: { id }, location: { page: "show", id: "project" } })
         })
@@ -1448,18 +1455,32 @@ function historyDelete(id, data, { updater } = { updater: "" }) {
 
 async function duplicateShows(selectedData: any) {
     await loadShows(selectedData.map(({ id }) => id))
-    selectedData.forEach(({ id }) => {
-        const show = clone(get(showsCache)[id])
-        if (!show) return
-
-        show.name = checkName(show.name + " 2")
-        show.timestamps.modified = new Date().getTime()
-
-        const newId = uid()
-        history({ id: "UPDATE", newData: { data: show, remember: { project: id === "show" ? get(activeProject) : null } }, oldData: { id: newId }, location: { page: "show", id: "show" } })
-
-        if (selectedData.length === 1) {
-            activeRename.set("show_drawer_" + newId)
-        }
+    let newIds: string[] = []
+    selectedData.forEach(async ({ id }) => {
+        const projectId = id === "show" ? get(activeProject) : null
+        const newId = await duplicateShow(id, projectId, true)
+        if (newId !== id) newIds.push(newId)
     })
+
+    setTimeout(() => {
+        // update list instantly
+        updateShowsList(get(shows))
+
+        // activate rename
+        if (newIds.length === 1) activeRename.set("show_drawer_" + newIds[0])
+    })
+}
+
+export async function duplicateShow(id: string, projectId?: string | null, alreadyLoaded: boolean = false): Promise<string> {
+    if (!alreadyLoaded) await loadShows([id])
+    const show = clone(get(showsCache)[id])
+    if (!show) return id
+
+    show.name = checkName(show.name)
+    if (!show.timestamps) show.timestamps = { created: Date.now(), modified: Date.now(), used: null }
+    else show.timestamps.modified = Date.now()
+
+    const newId = uid()
+    history({ id: "UPDATE", newData: { data: show, remember: { project: projectId || null } }, oldData: { id: newId }, location: { page: "show", id: "show" } })
+    return newId
 }

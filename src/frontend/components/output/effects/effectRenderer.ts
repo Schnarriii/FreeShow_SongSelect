@@ -7,7 +7,9 @@ const effectTypes: readonly EffectType[] = ["circle", "rectangle", "triangle", "
 export class EffectRender {
     canvas: HTMLCanvasElement
     ctx: CanvasRenderingContext2D
+    rawItems: EffectItem[] = []
     items: EffectItem[]
+    highlightedIndex: number | null = null
     running = false
     lastTime = 0
     width = 1920
@@ -68,6 +70,7 @@ export class EffectRender {
     }
 
     private setItems(items: EffectItem[]) {
+        this.rawItems = items
         this.items = items.filter((a) => !a.hidden)
     }
 
@@ -86,6 +89,11 @@ export class EffectRender {
             }
         }
 
+        // Re-initialize updated items with their new parameters
+        for (const item of filteredNew) {
+            this.TYPES[item.type]?.init?.(item)
+        }
+
         this.setItems(items)
 
         // if (noFrameChange) return
@@ -99,7 +107,10 @@ export class EffectRender {
         const ctx = this.ctx
         ctx.clearRect(0, 0, this.width, this.height)
 
-        for (const item of this.items) {
+        const hasHighlight = this.highlightedIndex !== null && this.highlightedIndex !== undefined && this.highlightedIndex >= 0
+
+        for (let i = 0; i < this.items.length; i++) {
+            const item = this.items[i]
             const effect = this.TYPES[item.type]
             if (!effect) {
                 if (init) {
@@ -109,8 +120,22 @@ export class EffectRender {
                 continue
             }
 
-            if (init) effect.init?.(item)
-            else effect.render(item, deltaTime)
+            if (init) {
+                effect.init?.(item)
+            } else {
+                const originalIndex = this.rawItems.indexOf(item)
+                const isDimmed = hasHighlight && originalIndex !== -1 && this.highlightedIndex !== originalIndex
+
+                if (isDimmed) {
+                    ctx.save()
+                    ctx.globalAlpha = 0.7
+                    ctx.filter = "opacity(70%)"
+                }
+
+                effect.render(item, deltaTime)
+
+                if (isDimmed) ctx.restore()
+            }
         }
     }
 
@@ -2279,11 +2304,7 @@ export class EffectRender {
 
     private getConfettiColors(baseColor?: string): string[] {
         if (!baseColor || baseColor === "transparent" || baseColor === "rgba(0,0,0,0)") {
-            return [
-                "#f44336", "#e91e63", "#9c27b0", "#3f51b5",
-                "#2196f3", "#00bcd4", "#4caf50", "#ffeb3b",
-                "#ff9800", "#ff5722", "#e040fb", "#00e676"
-            ]
+            return ["#f44336", "#e91e63", "#9c27b0", "#3f51b5", "#2196f3", "#00bcd4", "#4caf50", "#ffeb3b", "#ff9800", "#ff5722", "#e040fb", "#00e676"]
         }
 
         // Parse base color (supports hex, rgb, rgba)
@@ -2337,9 +2358,7 @@ export class EffectRender {
             return
         }
 
-        const particles = Array.from({ length: count }, () =>
-            this.isPreview ? this.createConfettiFallingParticle(item, colors, true) : this.createConfettiBurstParticle(item, colors)
-        )
+        const particles = Array.from({ length: count }, () => (this.isPreview ? this.createConfettiFallingParticle(item, colors, true) : this.createConfettiBurstParticle(item, colors)))
         this.effectData.set(item, { particles, colors, baseColor: item.color })
     }
 
@@ -2460,7 +2479,12 @@ export class EffectRender {
 
             // Check offscreen bottom
             if (p.y > this.height + 30) {
-                particles[i] = this.createConfettiFallingParticle(item, colors, false)
+                if (item.loop || this.isPreview) {
+                    particles[i] = this.createConfettiFallingParticle(item, colors, false)
+                } else {
+                    particles.splice(i, 1)
+                    i--
+                }
                 continue
             }
 

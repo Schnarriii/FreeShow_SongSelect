@@ -3,6 +3,7 @@
     // import VirtualList from "@sveltejs/svelte-virtual-list"
     // import VirtualList from "./VirtualList2.svelte"
     import type { ShowList } from "../../../../types/Show"
+    import { ShowObj } from "../../../classes/Show"
     import { activeEdit, activeFocus, activePopup, activeProfile, activeProject, activeShow, activeTagFilter, categories, drawer, focusedArea, focusMode, labelsDisabled, shows, sorted, sortedShowsList } from "../../../stores"
     import { translateText } from "../../../utils/language"
     import { getAccess } from "../../../utils/profile"
@@ -20,13 +21,13 @@
     import Center from "../../system/Center.svelte"
     import SelectElem from "../../system/SelectElem.svelte"
     import VirtualList from "../VirtualList.svelte"
-    import { ShowObj } from "../../../classes/Show"
     import { openSongSelect } from "../../../utils/songselect"
 
     export let active: string | null
     export let searchValue: string
 
-    $: formattedSearch = formatSearch(searchValue)
+    $: query = searchValue.trim()
+    $: isSearching = formatSearch(query).trim().length > 1
     $: showsSorted = $sortedShowsList
 
     // // don't update unless it's changed
@@ -70,7 +71,8 @@
 
     // let scrolledToTop = ""
     let createFromSearch = false
-    $: if (formattedSearch !== undefined || filteredStored || $activeTagFilter) search()
+    let lastQuery = ""
+    $: if (query !== undefined || filteredStored || $activeTagFilter) search()
     function search() {
         if (isTyping) return
         // don't update if drawer is closed
@@ -81,12 +83,20 @@
         }
         shouldUpdate = false
 
-        if (searchValue.length > 1) {
-            filteredShows = showSearch(formattedSearch, filterByTags(filteredStored, $activeTagFilter))
+        const queryChanged = query !== lastQuery
+        lastQuery = query
+
+        if (isSearching) {
+            filteredShows = showSearch(query, filterByTags(filteredStored, $activeTagFilter))
+
+            // a new query starts the keyboard selection over at the top result
+            if (queryChanged) clearSearchSelection()
+            else if ($activeShow?.data?.searchInput && !filteredShows.some((a) => a.id === $activeShow?.id)) clearSearchSelection()
+
             firstMatch = filteredShows[0] || null
 
             // if nothing matches (or match confidence is very low on long search)
-            if (!showLoading && (!filteredShows.length || (active === "all" && searchValue.length > 5 && (firstMatch?.match || 0) < 48))) {
+            if (!showLoading && (!filteredShows.length || (active === "all" && query.length > 5 && (firstMatch?.match || 0) < 48))) {
                 firstMatch = "SEARCH_CREATE"
                 createFromSearch = true
             } else {
@@ -94,20 +104,21 @@
             }
 
             // scroll to top
-            setTimeout(() => document.querySelector("svelte-virtual-list-viewport")?.scrollTo(0, 0))
-            // if (scrolledToTop !== searchValue)
-            // scrolledToTop = searchValue
+            if (queryChanged) setTimeout(() => document.querySelector(".drawer svelte-virtual-list-viewport")?.scrollTo(0, 0))
         } else {
             filteredShows = filterByTags(clone(filteredStored), $activeTagFilter)
             firstMatch = null
             createFromSearch = false
-            if ($activeShow?.data?.searchInput) {
-                activeShow.update((a) => {
-                    delete a!.data
-                    return a
-                })
-            }
+            clearSearchSelection()
         }
+    }
+
+    function clearSearchSelection() {
+        if (!$activeShow?.data?.searchInput) return
+        activeShow.update((a) => {
+            delete a!.data
+            return a
+        })
     }
 
     function filterByTags(shows, tags: string[]) {
@@ -233,10 +244,10 @@
 <Autoscroll style="overflow-y: auto;flex: 1;">
     <!-- bind:this={listElem} -->
     <div class="column {readOnly ? '' : 'context #drawer_show'}" on:mouseup={() => focusedArea.set("show_drawer")}>
-        {#if createFromSearch && searchValue.length && typeof searchValue === "string" && activeIsSearch}
+        {#if createFromSearch && isSearching && activeIsSearch}
             <div class="warning" style="align-items: center;">
                 <!-- role="none" on:click={createNew} -->
-                <p style="padding: 6px 8px;"><T id="show.enter_create" />: <span style="color: var(--secondary);font-weight: bold;">{searchValue[0]?.toUpperCase() + searchValue.slice(1)}</span></p>
+                <p style="padding: 6px 8px;"><T id="show.enter_create" />: <span style="color: var(--secondary);font-weight: bold;">{query[0]?.toUpperCase() + query.slice(1)}</span></p>
                 <MaterialButton style="margin-left: auto; margin-right: 8px;" variant="outlined" on:click={() => openSongSelect(searchValue)} small>
                     <Icon id="music" size={0.9} />
                     <T id="songselect.search_for" />
@@ -263,27 +274,25 @@
 
             <!-- reload list when changing category -->
             {#key active}
-                <VirtualList items={filteredShows} let:item={show} activeIndex={searchValue.length ? -1 : filteredShows.findIndex((a) => a.id === $activeShow?.id)}>
+                <VirtualList items={filteredShows} let:item={show} activeIndex={!isSearching || $activeShow?.data?.searchInput ? filteredShows.findIndex((a) => a.id === $activeShow?.id) : -1}>
                     <SelectElem id="show_drawer" data={{ id: show.id }} shiftRange={filteredShows} draggable>
-                        {#if searchValue.length <= 1 || show.match}
-                            <ShowButton id={show.id} {show} data={dateToString(show.timestamps?.[sortType.replace("_old", "")] || show.timestamps?.modified || show.timestamps?.created || "", true)} class="#drawer_show_button" match={show.match || null} {searchValue} isFirst={firstMatch?.id === show.id && activeIsSearch} />
+                        {#if !isSearching || show.match}
+                            <ShowButton id={show.id} {show} data={dateToString(show.timestamps?.[sortType.replace("_old", "")] || show.timestamps?.modified || show.timestamps?.created || "", true)} class="#drawer_show_button" match={show.match || null} searchValue={query} isFirst={firstMatch?.id === show.id && activeIsSearch} />
                         {/if}
                     </SelectElem>
                 </VirtualList>
             {/key}
-
-            {#if searchValue.length > 1 && !filteredShows.length}
-                <Center size={1.2} faded><T id="empty.search" /></Center>
-                <div style="display: flex; justify-content: center; margin: 15px 0;">
-                    <MaterialButton variant="outlined" on:click={() => openSongSelect(searchValue)}>
-                        <Icon id="music" />
-                        <T id="songselect.search_for" />: "{searchValue}"
-                    </MaterialButton>
-                </div>
-            {/if}
+        {:else if isSearching}
+            <Center size={1.2} faded><T id="empty.search" /></Center>
+            <div style="display: flex; justify-content: center; margin: 15px 0;">
+                <MaterialButton variant="outlined" on:click={() => openSongSelect(searchValue)}>
+                    <Icon id="music" />
+                    <T id="songselect.search_for" />: "{searchValue}"
+                </MaterialButton>
+            </div>
         {:else}
             <Center size={1.2} faded><T id="empty.shows" /></Center>
-            {#if searchValue.length > 1}
+            {#if isSearching}
                 <div style="display: flex; justify-content: center; margin: 15px 0;">
                     <MaterialButton variant="outlined" on:click={() => openSongSelect(searchValue)}>
                         <Icon id="music" />
@@ -301,7 +310,8 @@
         {#if !$labelsDisabled}<T id="songselect.button" />{/if}
     </MaterialButton>
     {#if showWithNonExistentCategory}
-        <MaterialButton icon="autofill" on:click={createNonExistentCategories}>
+        <MaterialButton on:click={createNonExistentCategories}>
+            <Icon id="autofill" gradient />
             <T id="category.create_nonexistent" />
         </MaterialButton>
     {:else if active === "all" && !searchValue && filteredShows.length < 20}
@@ -329,7 +339,7 @@
         height: 100%;
 
         --number-width: 100px;
-        --modified-width: 220px;
+        --modified-width: 120px;
     }
 
     .warning {

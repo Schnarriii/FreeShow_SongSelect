@@ -15,17 +15,19 @@ export function checkName(name = "", showId = "") {
     if (!name || typeof name !== "string") name = translateText("main.unnamed")
     name = formatToFileName(name)
 
-    // if ID exists, check the name if different
-    if (showId && get(shows)[showId]) {
-        if (get(shows)[showId]?.name !== name) return checkName(name)
-        return name
-    }
+    const showsList = Object.entries(get(shows) || {})
+
+    // strip trailing space + digits from the name if it exists, so "x 2" becomes "x", and then likely "x 3" instead of "x 2 2"
+    const hasConflict = showsList.some(([id, a]) => (!showId || id !== showId) && a.name?.toLowerCase() === name.toLowerCase())
+    if (hasConflict) name = name.replace(/\s+\d+$/, "")
+
+    const nameLower = name.toLowerCase()
 
     let number = 1
-    while (Object.values(get(shows)).find((a) => a.name?.toLowerCase() === (number > 1 ? name.toLowerCase() + " " + number : name.toLowerCase()))) number++
+    while (showsList.find(([id, a]) => (!showId || id !== showId) && a.name?.toLowerCase() === (number > 1 ? `${nameLower} ${number}` : nameLower))) number++
 
     // add number if existing name, and trim away spaces from the start/end
-    return (number > 1 ? name + " " + number : name).trim()
+    return (number > 1 ? `${name} ${number}` : name).trim()
 }
 
 export function formatToFileName(name = "") {
@@ -249,6 +251,33 @@ export function updateShowsList(allShows: TrimmedShows) {
 
     const filteredShows: ShowList[] = removeValues(sortedShows, "private", true) // .filter((a) => !a.category || !hiddenCategories.includes(a.category))
     sortedShowsList.set(filteredShows)
+}
+
+// sync "shows" data from "showsCache"
+export function syncCachedShows(cacheData: Shows = get(showsCache)) {
+    if (!cacheData || typeof cacheData !== "object") return
+
+    const current = get(shows)
+    const updates: TrimmedShows = {}
+
+    Object.entries(cacheData).forEach(([id, show]) => {
+        if (!show) return
+        const trimmed: TrimmedShow = {
+            name: show.name,
+            category: show.category || null,
+            timestamps: show.timestamps || current[id]?.timestamps || { created: 0, modified: null, used: null },
+            quickAccess: show.quickAccess || {},
+            ...(show.origin ? { origin: show.origin } : {}),
+            ...(show.private ? { private: true } : {}),
+            ...(show.locked ? { locked: true } : {})
+        }
+
+        if (JSON.stringify(current[id]) !== JSON.stringify(trimmed)) updates[id] = trimmed
+    })
+
+    if (Object.keys(updates).length) {
+        shows.update((a) => ({ ...a, ...updates }))
+    }
 }
 
 // update cached shows

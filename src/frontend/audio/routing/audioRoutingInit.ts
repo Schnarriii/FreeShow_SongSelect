@@ -9,9 +9,10 @@ import { confirmCustom } from "../../utils/popup"
 export function deduplicateConnections(connections: AudioRoutingConnection[]): AudioRoutingConnection[] {
     const seen = new Set<string>()
     return connections.filter((c) => {
-        const chIdx = c.channelIndex ?? 0
+        const fromCh = c.fromChannelIndex ?? (c.from.startsWith("mic_sub_") ? (c.channelIndex ?? -1) : -1)
+        const toCh = c.toChannelIndex ?? (c.to.startsWith("speaker_sub_") ? (c.channelIndex ?? 0) : 0)
         const connType = c.type || "audio"
-        const key = `${c.from}->${c.to}:${chIdx}:${connType}`
+        const key = `${c.from}:${fromCh}->${c.to}:${toCh}:${connType}`
         if (seen.has(key)) return false
         seen.add(key)
         return true
@@ -59,7 +60,7 @@ export async function initAudioRouting(data: AudioRoutingConfig | null) {
     let firstConnected = false
     outputsList.forEach((out) => {
         // any network outputs should have their own channel
-        if (out.ndi || out.webrtc || out.rtmp) {
+        if (out.ndi || out.omt || out.webrtc || out.rtmp) {
             channels.push({ id: `channel_${out.id}`, name: out.name, color: out.color, outputLink: out.id })
             connections.push(...createOutputConnections(out.id))
             return
@@ -89,7 +90,7 @@ export async function resetAudioRouting() {
 // make sure at least one "active" output is connected to the main channel when creating a new output
 export function checkPrimaryOutputRouting() {
     const outputsList = getAllOutputs()
-    const primaryOutputs = outputsList.filter((out) => out.enabled && !out.ndi && !out.webrtc && !out.rtmp && !out.stageOutput)
+    const primaryOutputs = outputsList.filter((out) => out.enabled && !out.ndi && !out.omt && !out.webrtc && !out.rtmp && !out.stageOutput)
     const outputInputs = primaryOutputs.map((out) => `output_win_sub_${out.id}`)
     if (!outputInputs.length) return
 

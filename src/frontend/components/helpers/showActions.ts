@@ -12,6 +12,7 @@ import { AudioMicrophone } from "../../audio/audioMicrophone"
 import { AudioPlayer } from "../../audio/audioPlayer"
 import { requestMain, sendMain } from "../../IPC/main"
 import { isMainWindow, isOutputWindow } from "../../utils/common"
+import { convertTXTToString, getTXT } from "../../utils/dynamicTXT"
 import { send } from "../../utils/request"
 import { convertRSSToString, getRSS } from "../../utils/rss"
 import { runAction, slideHasAction } from "../actions/actions"
@@ -60,7 +61,7 @@ import {
     variables
 } from "./../../stores"
 import { clone, keysToID, sortByName } from "./array"
-import { downloadOnlineMedia, encodeFilePath, getExtension, getFileName, getMedia, getMediaStyle, getMediaType, removeExtension } from "./media"
+import { downloadOnlineMedia, encodeFilePath, getExtension, getFileName, getMedia, getMediaStyle, getMediaType, locateMediaFile, removeExtension } from "./media"
 import { defaultLayers, getActiveOutputs, getAllActiveOutputIds, getAllNormalOutputs, getAllStageOutputs, getFirstActiveOutput, getFirstOutput, getWindowOutputId, isOutCleared, refreshOut, resolveOutputId, resolveOutputIds, setOutput, startFolderTimer } from "./output"
 import { OutputHelper } from "./OutputHelper"
 import { getSetChars } from "./randomValue"
@@ -239,17 +240,24 @@ export function checkActionTrigger(layoutData: SlideData, slideIndex = 0) {
     })
 }
 
-export async function playPdf(data: OutSlide | null, next: boolean, loop = false) {
+export async function playPdf(data: OutSlide | null, next: boolean, loop = false, page?: number) {
     if (!data?.id || data?.type !== "pdf") return
 
+    const located = await locateMediaFile(data.id)
+    const targetId = located?.path || data.id
+
     GlobalWorkerOptions.workerSrc = "./assets/pdf.worker.min.mjs"
-    const loadingTask = getDocument(encodeFilePath(data.id))
+    const loadingTask = getDocument(encodeFilePath(targetId))
     const pdfDoc = await loadingTask.promise
     const pages = pdfDoc.numPages
 
-    let nextPage = data.page
-    if (nextPage === undefined) nextPage = next ? -1 : pages
-    nextPage += next ? 1 : -1
+    let nextPage: number
+    if (page !== undefined) {
+        nextPage = page
+    } else {
+        const currentPage = data.page !== undefined ? data.page : next ? -1 : pages
+        nextPage = currentPage + (next ? 1 : -1)
+    }
 
     if (nextPage > pages - 1) {
         if (!loop) return
@@ -257,13 +265,13 @@ export async function playPdf(data: OutSlide | null, next: boolean, loop = false
     }
 
     const projectItem = get(projects)[get(activeProject) || ""]?.shows?.[get(activeShow)?.index || 0]
-    const name = data?.name || projectItem?.name
+    const name = data?.name || projectItem?.name || removeExtension(getFileName(targetId))
 
-    setOutput("slide", { type: "pdf", id: data.id, page: nextPage, pages, name })
+    setOutput("slide", { type: "pdf", id: targetId, page: nextPage, pages, name })
     clearBackground()
 
     const timer = projectItem?.data?.timer || 0
-    if (timer) startFolderTimer(data.id, { type: "pdf", path: "" })
+    if (timer) startFolderTimer(targetId, { type: "pdf", path: "" })
 }
 
 // go to random slide in current project
@@ -402,6 +410,9 @@ export function updateOut(showId: string, index: number, layout: LayoutRef[], ex
                 const loop = bg.loop !== false
                 const muted = bg.muted !== false
 
+                // player videos on a slide are treated as background, so we don't clear slide layers
+                const ignoreLayer = type === "player" ? false : mediaStyle.videoType === "foreground"
+
                 const bgData = {
                     name,
                     type,
@@ -411,7 +422,7 @@ export function updateOut(showId: string, index: number, layout: LayoutRef[], ex
                     loop,
                     muted,
                     ...mediaStyle,
-                    ignoreLayer: mediaStyle.videoType === "foreground",
+                    ignoreLayer,
                     bindings
                 }
 
@@ -753,7 +764,7 @@ export function sendMidi(data: any) {
 
 // DYNAMIC VALUES
 
-const commonOnly = ["time_str", "project_section_notes", "project_section_time", "show_name_next", "show_text_full", "slide_group_text", "slide_text_", "layout_notes", "slide_group_upcoming", "slide_notes_next", "exif_", "audio_subtitle", "audio_genre", "audio_year", "audio_volume"]
+const commonOnly = ["time_str", "project_section_notes", "project_section_time", "project_item_number", "project_items_count", "show_name_next", "show_text_full", "slide_group_text", "slide_text_", "layout_notes", "slide_group_upcoming", "slide_notes_next", "exif_", "audio_subtitle", "audio_genre", "audio_year", "audio_volume"]
 const deprecatedDynamicValues = ["show_name_next", "project_section_next", "project_section_time_next", "slide_group_next", "slide_group_next_color", "slide_notes_next", "slide_text_previous", "slide_text_current", "slide_text_next"]
 
 function insertOffsetVariants(idList: string[]): string[] {
@@ -794,8 +805,13 @@ export function getDynamicIds(noVariables = false, mode: null | "scripture" | "d
         .filter((a) => a.name)
         .map(({ name }) => `rss_${getVariableNameId(name)}`)
 
+    const txtValues = sortByName(get(special).dynamicTXT || [])
+        .filter((a) => a.name)
+        .map(({ name }) => `txt_${getVariableNameId(name)}`)
+
     if (timersList.length) mergedValues.push(...timersList)
     if (rssValues.length) mergedValues.push(...rssValues)
+    if (txtValues.length) mergedValues.push(...txtValues)
     mergedValues.push(...getVariablesIds(showAll))
     return mergedValues
 }
@@ -1047,6 +1063,14 @@ export function replaceDynamicValues(text: string, { showId, layoutId, slideInde
             return convertRSSToString(getRSS(rss.url, rss.updateInterval), rss.divider, rss.count)
         }
 
+        if (dynamicId.startsWith("txt_")) {
+            const nameId = dynamicId.slice(4)
+            const txt = get(special).dynamicTXT?.find((a) => getVariableNameId(a.name) === nameId)
+            if (!txt) return ""
+
+            return convertTXTToString(getTXT(txt.url, txt.updateInterval), txt.divider)
+        }
+
         let outputId: string = getWindowOutputId()
         const output = get(outputs)[outputId]
 
@@ -1189,6 +1213,20 @@ const dynamicValues = {
         const projectTime = getActiveProjectSection({}, 1 + offset)?.data?.time
         return projectTime ? joinTimeBig(getTimeUntilClock(getActiveProjectSection({}, 1 + offset)?.data?.time)) : "00:00"
     },
+    project_item_number: ({ projectRef }) => {
+        // get outputted index
+        let index = projectRef?.index ?? -1
+        if (index < 0) {
+            // get any opened index
+            const activeItem = get(focusMode) ? get(activeFocus) : get(activeShow)
+            if (typeof activeItem?.index === "number" && activeItem.index >= 0) index = activeItem.index
+        }
+        return (Number(index ?? -1) + 1).toString()
+    },
+    project_items_count: ({ projectRef }) => {
+        const projectItems = get(projects)[projectRef?.id || ""]?.shows || []
+        return projectItems.length
+    },
 
     // show
     show_name: ({ show, projectRef, offset }) => {
@@ -1210,7 +1248,7 @@ const dynamicValues = {
     layout_slides: ({ ref }) => ref.length,
     layout_notes: ({ layout }) => layout.notes || "",
 
-    slide_number: ({ slideIndex, offset }) => (Number(slideIndex ?? -1) + 1 + offset).toString(),
+    slide_number: ({ slideIndex }) => (Number(slideIndex ?? -1) + 1).toString(),
     slide_group: ({ show, ref, slideIndex, outSlide, offset }) => {
         const idx = slideIndex + offset
         const parentIndex = ref[idx]?.parent?.layoutIndex ?? idx
@@ -1509,8 +1547,9 @@ function getMetadata(audioPath: string) {
 }
 
 function getArtist(metadata: ICommonTagsResult) {
-    const artists = [metadata.originalartist, metadata.artist, metadata.albumartist, ...(metadata.artists || [])].filter(Boolean)
-    return [...new Set(artists)].join(", ")
+    if (!metadata) return ""
+    const list = (metadata.artists?.length ? metadata.artists : [metadata.artist || metadata.albumartist || metadata.originalartist]).filter((a): a is string => Boolean(a))
+    return [...new Set(list.map((a) => a.trim()).filter(Boolean))].join(", ")
 }
 
 // INTERACTION

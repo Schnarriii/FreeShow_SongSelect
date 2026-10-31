@@ -1,6 +1,7 @@
 import { get } from "svelte/store"
 import { getFirstOutput } from "../components/helpers/output"
 import { disabledServers, media, playingAudio, playingVideos, serverData } from "../stores"
+import { AudioMicrophone } from "./audioMicrophone"
 import { AudioMultichannel, MultichannelInfo } from "./audioMultichannel"
 import { AudioPlayer } from "./audioPlayer"
 import { AudioProcessor, PitchShiftNode } from "./audioProcessor"
@@ -56,7 +57,11 @@ export class AudioAnalyser {
 
     static hasSource(id: string, outputId?: string): boolean {
         const key = outputId ? `${id}_${outputId}` : id
-        return !!this.sources[key]
+        return !!this.sources[key] || !!this.gainNodes[key]
+    }
+
+    static getActiveSourceIds(): string[] {
+        return Object.keys(this.sources)
     }
 
     static updateSource(id: string, audio: HTMLMediaElement | MediaStream, outputId?: string) {
@@ -107,10 +112,25 @@ export class AudioAnalyser {
         this.initAnalysers()
         this.recorderActivate()
 
+        let streamChannelCount = 2
+        if (audio instanceof MediaStream) {
+            const [track] = audio.getAudioTracks()
+            const settings = track?.getSettings()
+            const cap = (track as any)?.getCapabilities?.()
+            const devId = id.startsWith("mic_sub_") ? id.replace("mic_sub_", "") : ""
+            streamChannelCount = Math.max(1, cap?.channelCount?.max || settings?.channelCount || (devId ? AudioMicrophone.channelCountCache.get(devId) : undefined) || 2)
+        }
+
         const processor = AudioProcessor.createNode(this.ac)
+        if (streamChannelCount > 2) {
+            processor.configureMultichannel(streamChannelCount)
+        }
         this.processors[key] = processor
 
         const sourceGain = this.ac.createGain()
+        if (streamChannelCount > 2) {
+            AudioMultichannel.configureNodeForMultichannel(sourceGain, streamChannelCount)
+        }
         this.gainNodes[key] = sourceGain
         const initialVolume = this.sourceVolumes[key] ?? this.sourceVolumes[id] ?? (audio instanceof HTMLMediaElement ? audio.volume : 1.0)
         sourceGain.gain.setValueAtTime(initialVolume, this.ac.currentTime)
@@ -148,7 +168,7 @@ export class AudioAnalyser {
         const prefix = `${id}_`
         for (let i = 0; i < keys.length; i++) {
             const k = keys[i]
-            if (outputId ? k === `${id}_${outputId}` : (k === id || k.startsWith(prefix))) {
+            if (outputId ? k === `${id}_${outputId}` : k === id || k.startsWith(prefix)) {
                 this.sourceVolumes[k] = volume
                 this.gainNodes[k]?.gain.setValueAtTime(volume, this.ac.currentTime)
             }
@@ -167,7 +187,7 @@ export class AudioAnalyser {
 
         for (let i = 0; i < keys.length; i++) {
             const k = keys[i]
-            if (outputId ? k === `${id}_${outputId}` : (k === id || k.startsWith(prefix))) {
+            if (outputId ? k === `${id}_${outputId}` : k === id || k.startsWith(prefix)) {
                 const node = this.gainNodes[k]
                 if (node) {
                     try {
@@ -471,11 +491,19 @@ export class AudioAnalyser {
         return rms > 0.000001 ? Math.max(MIN_DB, Math.min(0, 20 * Math.log10(rms))) : MIN_DB
     }
 
+    static releaseAnalyser(path?: string) {
+        if (!path) return
+        AudioInputCapture.getInstance().removeInput(path)
+    }
+
     static getAnalysers(path?: string) {
         let nodeId = "speaker_default"
 
-        // WIP per item capture for visualizer (audio file playback preview) ?
-        if (path) nodeId = path
+        if (path) {
+            nodeId = path
+            const source = this.gainNodes[path] || this.sources[path]
+            if (source) AudioInputCapture.getInstance().captureInput(path, source)
+        }
 
         return AudioInputCapture.getInstance().getAnalysers(nodeId)
     }

@@ -35,7 +35,6 @@ export const defaultSettings: { [key in SaveListSettings]: any } = {
     autoOutput: false,
     autosave: "15min",
     timeFormat: "24",
-    remotePassword: "",
     ports: { remote: 5510, stage: 5511 },
     disabledServers: {},
     serverData: {},
@@ -58,8 +57,6 @@ export const defaultSettings: { [key in SaveListSettings]: any } = {
     groupNumbers: true,
     fullColors: false,
     formatNewShow: false,
-    showsPath: null, // DEPRECATED
-    dataPath: "", // DEPRECATED
     lockedOverlays: {},
     activeScenes: {},
     splitLines: 0,
@@ -164,7 +161,6 @@ export const defaultSyncedSettings: { [key in SaveListSyncedSettings]: any } = {
     variableTags: {},
     timerTags: {},
     customizedIcons: { disabled: [], svg: [] },
-    companion: {},
     globalTags: {},
     globalRegexes: {},
     customMetadata: { disabled: [], custom: [] },

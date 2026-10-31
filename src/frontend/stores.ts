@@ -20,11 +20,12 @@ import type { Action, CustomFont, Emitter, ID, Overlays, Scene, ShowGroups, Show
 import type { ServerData } from "../types/Socket"
 import type { ActiveStage, StageLayouts } from "../types/Stage"
 import type { BibleCategories, Categories, DrawerTabs, EditMode, SettingsTabs, TopViews } from "../types/Tabs"
-import { AiSuggestion } from "./../types/ai/Ai"
+import type { AiSuggestion } from "./../types/ai/Ai"
 import type { AiSettings } from "./../types/ai/AiSettings"
 import type { Outputs, RtmpStatus, SyncedOutputs } from "./../types/Output"
 import type { DrawerTabIds } from "./../types/Tabs"
 import type { AudioData } from "./audio/audioPlayer"
+import type { WebsiteAction } from "./components/helpers/websiteControls"
 import type { PlayingVideoState, VideoAudioData } from "./components/media/video/videoPlayer"
 
 // ----- TEMPORARY VARIABLES -----
@@ -33,7 +34,7 @@ import type { PlayingVideoState, VideoAudioData } from "./components/media/video
 export const os: Writable<OS> = writable({ platform: "win32", name: "", arch: "" })
 export const deviceId: Writable<string> = writable("")
 export const version: Writable<string> = writable("0.0.0")
-export const currentWindow: Writable<null | "output" | "pdf"> = writable(null)
+export const currentWindow: Writable<null | "output" | "pdf" | "media"> = writable(null)
 export const localeDirection: Writable<"rtl" | "ltr"> = writable("ltr")
 export const dictionary: Writable<Dictionary> = writable({})
 export const saved: Writable<boolean> = writable(true)
@@ -41,6 +42,7 @@ export const loaded: Writable<boolean> = writable(false)
 export const loadedState: Writable<string[]> = writable([])
 export const isDev: Writable<boolean> = writable(false)
 export const windowState: Writable<any> = writable({})
+export const dataPath: Writable<string> = writable("")
 
 // ACTIVE
 export const selected: Writable<Selected> = writable({ id: null, data: [] })
@@ -70,10 +72,12 @@ export const globalGroupViewEnabled: Writable<boolean> = writable(false)
 export const activeRecording: Writable<any> = writable(null)
 export const currentRecordingStream: Writable<any> = writable(null)
 export const focusedArea: Writable<string> = writable("")
+export const hoveredEffectItem: Writable<number | null> = writable(null)
 export const activeAnimate: Writable<any> = writable({ slide: -1, index: -1 })
 export const allOutputs: Writable<Outputs> = writable({}) // stage data in output windows
 export const activeScripture: Writable<{ id?: string; reference?: { book: number | string; chapters: (number | string)[]; verses: (number | string)[][] } }> = writable({})
 export const activeCanvaPresentation: Writable<{ designId: string; presentationName: string; slideCount?: number; thumbnail?: string; providerId?: ContentProviderId } | null> = writable(null)
+export const websiteAction: Writable<WebsiteAction | null> = writable(null)
 export const activeTriggerFunction: Writable<string> = writable("")
 export const guideActive: Writable<boolean> = writable(false)
 export const runningActions: Writable<string[]> = writable([])
@@ -82,9 +86,10 @@ export const providerConnections: Writable<{ [key in ContentProviderId]?: boolea
 export const metronomeTimer: Writable<{ beat: number; timeToNext: number }> = writable({ beat: 0, timeToNext: 0 })
 export const mediaDownloads: Writable<Map<string, { progress: number; total: number; status: string; name?: string }>> = writable(new Map())
 export const rtmpStatus: Writable<{ [outputId: string]: RtmpStatus }> = writable({})
+export const icecastStatus: Writable<{ connected: boolean; connecting?: boolean; error?: string }> = writable({ connected: false })
 export const pdfImports: Writable<Map<string, { name: string; progress: number; total: number; status: "importing" | "complete" | "error"; message?: string }>> = writable(new Map())
 export const showChangeProfileMenu: Writable<boolean> = writable(false)
-export const cloudUsers: Writable<{ displayName: string; color: string; lastUpdate?: number; activePage?: string; activeShow?: ShowRef }[]> = writable([])
+export const cloudUsers: Writable<{ displayName: string; deviceId?: string; color: string; lastUpdate?: number; activePage?: string; activeShow?: ShowRef }[]> = writable([])
 export const isTimelinePlaying: Writable<boolean> = writable(false)
 export const timelineRecordingAction: Writable<{ id: string; data?: any }> = writable({ id: "" })
 export const autoOpenedTimeline: Writable<boolean> = writable(false)
@@ -137,7 +142,6 @@ export const currentOutputSettings: Writable<string | null> = writable(null)
 export const slideTimers: Writable<{ [key: string]: SlideTimer }> = writable({})
 export const outputCache: Writable<any> = writable(null)
 export const outputSlideCache: Writable<any> = writable({})
-export const previewBuffers: Writable<any> = writable({})
 export const ndiData: Writable<any> = writable({})
 export const omtData: Writable<any> = writable({})
 export const closeAd: Writable<boolean> = writable(false)
@@ -351,7 +355,6 @@ export const timerTags: Writable<{ [key: string]: Tag }> = writable({}) // {}
 // OTHER
 export const resized: Writable<NumberObject> = writable({ leftPanel: 290, rightPanel: 290, leftPanelDrawer: 290, rightPanelDrawer: 290 }) // {default}
 export const sorted: Writable<any> = writable({}) // {}
-export const dataPath: Writable<string> = writable("") // "" // DEPRECATED - only for setting
 export const lockedOverlays: Writable<{ [key: string]: string[] }> = writable({}) // {}
 export const activeScenes: Writable<{ [key: string]: string[] }> = writable({}) // {}
 export const special: Writable<any> = writable({}) // {}
@@ -367,7 +370,6 @@ export const groupNumbers: Writable<boolean> = writable(true) // true
 export const fullColors: Writable<boolean> = writable(false) // false
 export const formatNewShow: Writable<boolean> = writable(false) // false
 export const splitLines: Writable<number> = writable(0) // 0
-export const showsPath: Writable<null | string> = writable(null) // null // DEPRECATED
 export const customizedIcons: Writable<any> = writable({ disabled: [], svg: [] }) // {disabled: [], svg: []}
 
 // THEME
@@ -380,6 +382,12 @@ export const styles: Writable<{ [key: string]: Styles }> = writable({}) // {}
 // OUTPUTS
 export const outputs: Writable<Outputs> = writable({}) // {default}
 export const syncedOutputs: Writable<SyncedOutputs> = writable({}) // {}
+// outputs with a running capture; their previews draw the captured frame
+export const capturedOutputs: Writable<{ [id: string]: boolean }> = writable({})
+// this output window draws the capture instead of rendering its content
+export const presenting: Writable<boolean> = writable(false)
+// shared renders: renderer output id -> member ids
+export const renderGroups: Writable<{ [rendererId: string]: string[] }> = writable({})
 export const outLocked: Writable<boolean> = writable(false) // false
 
 // PROFILES
@@ -398,8 +406,6 @@ export const ports: Writable<{ [key: string]: number }> = writable({ remote: 551
 export const disabledServers: Writable<any> = writable({ remote: false, stage: false, controller: true, output_stream: true }) // {}
 export const serverData: Writable<{ [key: string]: ServerData }> = writable({}) // {}
 export const maxConnections: Writable<number> = writable(10) // 10
-export const remotePassword: Writable<string> = writable("1234") // generate 4 numbers
-export const companion: Writable<any> = writable({ enabled: false }) // {}
 export const contentProviderData: Writable<{ [key in ContentProviderId]?: any }> = writable({}) // {}
 export const obsData: Writable<{ enabled?: boolean; connected?: boolean; ip?: string; port?: number; password?: string }> = writable({}) // {}
 
@@ -507,7 +513,6 @@ export const $ = {
     outLocked,
     ports,
     maxConnections,
-    remotePassword,
     providerConnections,
     calendars
 }

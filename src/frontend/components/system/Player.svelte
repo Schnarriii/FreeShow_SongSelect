@@ -9,20 +9,21 @@
     export let id: string
     export let outputId = ""
     export let preview = false
+    export let mirror = false
 
     let data: { type: "youtube" | "vimeo"; id: string; name?: string } | null = null
-    $: if ($activeShow && !$playerVideos[id]) getProjectData()
+    $: if (!$playerVideos[id]) getProjectData()
     function getProjectData() {
         const showMedia = _show($activeShow?.id || "").get("media")?.[id]
         if ((showMedia as any)?.data) data = (showMedia as any).data
         else if (showMedia?.type === "youtube" || showMedia?.type === "vimeo") data = { type: showMedia.type, id: showMedia.id || showMedia.path || id, name: showMedia.name }
-        else data = $projects[$activeProject || ""]?.shows.find((a) => a.index === $activeShow?.index)?.data || null
+        else data = $projects[$activeProject || ""]?.shows.find((a) => (typeof $activeShow?.index === "number" ? a.index === $activeShow?.index : a.id === id))?.data || null
     }
 
     $: video = $playerVideos[id] || data
 
-    let videoData = { muted: true, paused: false, loop: false, duration: 0 }
-    let videoTime = 0
+    export let videoData = { muted: true, paused: false, loop: false, duration: 0 }
+    export let videoTime = 0
 
     // TODO: looping player videos does not work!
 
@@ -54,10 +55,10 @@
 
 {#if video?.type === "youtube"}
     {#key video.id}
-        <YouTube id={video.id} bind:videoData bind:videoTime bind:actualVideoTime {preview} on:loaded on:ended />
+        <YouTube id={video.id} bind:videoData bind:videoTime bind:actualVideoTime {preview} {mirror} on:loaded on:ended />
     {/key}
 {:else if video?.type === "vimeo"}
     {#key video.id}
-        <Vimeo id={video.id} bind:videoData bind:videoTime bind:actualVideoTime {preview} on:loaded />
+        <Vimeo id={video.id} bind:videoData bind:videoTime bind:actualVideoTime {preview} {mirror} on:loaded />
     {/key}
 {/if}

@@ -24,6 +24,7 @@ import {
     audioFolders,
     audioPlaylists,
     audioRouting,
+    audioStreams,
     autoOutput,
     autosave,
     calendarAddShow,
@@ -34,7 +35,6 @@ import {
     customFonts,
     customMetadata,
     customizedIcons,
-    dataPath,
     deletedDefaults,
     deletedShows,
     disabledServers,
@@ -79,7 +79,6 @@ import {
     projects,
     providerConnections,
     redoHistory,
-    remotePassword,
     renamedShows,
     resized,
     saved,
@@ -90,7 +89,6 @@ import {
     serverData,
     shows,
     showsCache,
-    showsPath,
     slidesOptions,
     sorted,
     special,
@@ -117,8 +115,7 @@ import {
     videoMarkers
 } from "../stores"
 import type { SaveActions, SaveData, SaveList, SaveListSettings, SaveListSyncedSettings } from "./../../types/Save"
-import { audioStreams, companion } from "./../stores"
-import { socketDisconnect, syncWithCloud } from "./cloudSync"
+import { isSyncing, socketDisconnect, syncWithCloud } from "./cloudSync"
 import { newToast, setStatus, startAutosave } from "./common"
 import { syncDrive } from "./drive"
 import { autoDisableRemoteController, stopRemoteController } from "./remoteController"
@@ -170,8 +167,6 @@ export function save(closeWhenFinished = false, customTriggers: SaveActions = {}
         autosave: get(autosave),
         timeFormat: get(timeFormat),
         // events: get(events),
-        showsPath: get(showsPath), // DEPRECATED
-        dataPath: get(dataPath), // DEPRECATED
         lockedOverlays: get(lockedOverlays),
         activeScenes: get(activeScenes),
         drawer: get(drawer),
@@ -188,7 +183,6 @@ export function save(closeWhenFinished = false, customTriggers: SaveActions = {}
         outLocked: get(outLocked),
         outputs: sanitizedOutputs,
         sorted: get(sorted),
-        remotePassword: get(remotePassword),
         resized: get(resized),
         slidesOptions: get(slidesOptions),
         splitLines: get(splitLines),
@@ -285,7 +279,6 @@ export function getSyncedSettings(): { [key in SaveListSyncedSettings]: any } {
         variableTags,
         timerTags,
         customizedIcons,
-        companion,
         globalTags,
         globalRegexes,
         customMetadata,
@@ -313,8 +306,8 @@ export async function saveComplete({ closeWhenFinished, customTriggers }: { clos
 
         let shouldSync = true
         if (customTriggers?.autosave) {
-            // don't sync if already saved or if a slide is currently outputted
-            if (alreadySaved || !isOutCleared("slide")) shouldSync = false
+            // don't sync if already saved or if a slide is currently outputted or if cloud sync is in progress
+            if (alreadySaved || !isOutCleared("slide") || isSyncing) shouldSync = false
         }
 
         if (shouldSync) await syncWithCloud(false, closeWhenFinished)
@@ -456,8 +449,6 @@ const saveList: { [key in SaveList]: any } = {
     disabledServers,
     serverData,
     events,
-    showsPath: null,
-    dataPath: null,
     lockedOverlays: null,
     activeScenes: null,
     drawer: null,
@@ -481,7 +472,6 @@ const saveList: { [key in SaveList]: any } = {
     overlayCategories,
     overlays,
     playerVideos,
-    remotePassword,
     resized: null,
     scriptures,
     scriptureSettings,
@@ -520,7 +510,6 @@ const saveList: { [key in SaveList]: any } = {
     special,
     timeline: null,
     timecode: null,
-    companion: null,
     globalTags,
     globalRegexes: null,
     customMetadata: null,

@@ -45,13 +45,13 @@
         const hidden = ["slide_text", "slide_group_color", "slide_group_upcoming_color"]
         let nonStageHidden = ["show_text_full", "slide_group_text"]
         if ($showsCache[$activeShow?.id || ""]?.reference?.type !== "interaction") nonStageHidden.push("interaction_")
-        const stageHidden = ["interaction_"]
+        const stageHidden = ["interaction_", "slide_text+1"]
         if (isStage) list = list.filter((a) => !hidden.includes(a.id) && !stageHidden.some((h) => a.id.startsWith(h)))
         else list = list.filter((a) => !hidden.includes(a.id) && !nonStageHidden.some((h) => a.id.startsWith(h)))
 
         let separatorId = ""
         // the ones that can have a custom name should be first (to prevent it from overwriting a category)
-        const separators = ["$", "timer_", "meta_", "rss_", "project_", "time_", "show_", "slide_text", "exif_", "video_", "audio_", "scripture_", "interaction_"]
+        const separators = ["$", "timer_", "meta_", "rss_", "txt_", "project_", "time_", "show_", "slide_text", "exif_", "video_", "audio_", "scripture_", "interaction_"]
 
         let newList: { [key: string]: typeof list } = {}
         list.forEach((value) => {
@@ -82,6 +82,7 @@
         if (id === "meta_") return "tools.metadata"
         if (id === "timer_") return "items.timer"
         if (id === "rss_") return "settings.rss"
+        if (id === "txt_") return "settings.txt"
         if (id === "$") return "items.variable"
         return ""
     }
